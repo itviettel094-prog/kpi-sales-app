@@ -1,9 +1,6 @@
 <resources>
     <string name="app_name">KPI Bán Hàng</string>
 
-    <!-- ⚠️ ĐIỀN 2 giá trị dưới đây trước khi build -->
-    <!-- Web client ID lấy từ Google Cloud Console (PHẢI GIỐNG WEB_CLIENT_ID trong Code.gs) -->
     <string name="web_client_id">136393256935-ccl6rjnubbvo2e2gouf1j5pc4jnvg5sr.apps.googleusercontent.com</string>
-    <!-- Link Apps Script dạng .../exec -->
-    <string name="exec_url">ĐIỀN_LINK_EXEC_CUA_BAN</string>
+    <string name="exec_url">https://script.google.com/macros/s/AKfycbxx2K7nZcPtTdYVWv16g_FM5N4YwKd2_PW0qnrgTwNxEUnYcUO5LASCSooUiS7h__c3/exec</string>
 </resources>
