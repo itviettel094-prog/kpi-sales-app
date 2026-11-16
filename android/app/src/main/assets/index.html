@@ -248,6 +248,7 @@
         <textarea id="r_text" rows="16" readonly></textarea>
         <button class="btn-submit" onclick="copyReport()">📋 Copy báo cáo</button>
         <button class="btn-secondary btn-add-line" style="margin-top:8px;margin-bottom:0" onclick="loadReport()">🔄 Tải lại dữ liệu</button>
+                <div id="r_admin" style="margin-top:12px"></div>
       </div>
 
     </div>
@@ -1260,7 +1261,28 @@ function buildReport() {
     });
   });
   document.getElementById('r_text').value = out.join('\n');
+  renderReportAdmin();
 }
+function renderReportAdmin() {
+  var box = document.getElementById('r_admin');
+  if (!box) return;
+  if (!isAdmin) { box.innerHTML = ''; return; }
+  var date = document.getElementById('r_date').value;
+  var rows = _reportStock.filter(function(r){ return r.date === date; })
+    .sort(function(a, b){ return a.rowIndex - b.rowIndex; });
+  if (!rows.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="grp-sec">✏️ Admin: sửa / xoá Tồn đầu – Tồn cuối</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Cửa hàng</th><th>Sản phẩm</th><th>Tồn đầu</th><th>Tồn cuối</th><th></th></tr></thead><tbody>'
+    + rows.map(function(r) {
+        return '<tr><td>' + escHtml(r.store) + '</td><td>' + escHtml(r.product) + '</td>'
+          + '<td>' + (hasVal(r.tonDau) ? escHtml(String(r.tonDau)) : '-') + '</td>'
+          + '<td>' + (hasVal(r.tonCuoi) ? escHtml(String(r.tonCuoi)) : '-') + '</td>'
+          + '<td><button class="edit-link" onclick="openEditModal(\'stock\',' + r.rowIndex + ')">Sửa</button>'
+          + '<button class="del-link" onclick="deleteEntry(\'stock\',' + r.rowIndex + ')">Xoá</button></td></tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+  
 function copyReport() {
   var ta = document.getElementById('r_text');
   if (!ta.value || ta.value.indexOf('Đang tải') !== -1) { showToast('Chưa có báo cáo để copy.', 'error'); return; }
@@ -1289,7 +1311,7 @@ function setAdmin(on, token) {
   isAdmin = !!on;
   adminToken = on ? token : '';
   document.getElementById('adminStatus').textContent = isAdmin ? 'Chế độ: Admin ✅' : 'Chế độ: Nhân viên';
-  document.getElementById('gearBtn').classList.toggle('on', isAdmin);
+stockOverviewDate = ''; loadHistory(); loadReport(); })
   applyNavLock();
   renderStockProductSelect();
   refreshStockMode();
@@ -1565,7 +1587,7 @@ function openEditModal(kind, rowIndex) {
       + fld('Số lượng bán', '<input type="number" id="e_qty" min="0" value="' + escHtml(String(numVal(e.qty))) + '">')
       + fld('Người lưu', '<input type="text" id="e_user" value="' + escHtml(e.cashier || '') + '">');
   } else {
-    var e2 = _stockRows.filter(function(x){ return x.rowIndex === rowIndex; })[0]; if (!e2) return;
+    var e2 = _stockRows.concat(_reportStock).filter(function(x){ return x.rowIndex === rowIndex; })[0]; if (!e2) return;
     document.getElementById('editModalTitle').textContent = 'Sửa dữ liệu tồn kho';
     fields.innerHTML = fld('Ngày', '<input type="date" id="e_date" value="' + escHtml(e2.date) + '">')
       + fld('Cửa hàng', '<select id="e_store">' + optHtml(storesList, String(e2.store).trim()) + '</select>')
@@ -1590,6 +1612,7 @@ function confirmEdit() {
     closeEditModal();
     salesUsedDate = ''; stockOverviewDate = '';
     loadHistory();
+    loadReport();    
   };
   if (editingKind === 'sales') {
     var q = g('e_qty');
