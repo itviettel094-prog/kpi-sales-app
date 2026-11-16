@@ -310,7 +310,9 @@
       </div>
     </div>
     <button class="btn-secondary btn-add-line" onclick="adminSaveSchedule()">💾 Lưu hẹn giờ</button>
-
+    <div class="grp-sec">👥 Nhân viên online / offline</div>
+    <button class="btn-secondary btn-add-line" onclick="loadPresence()">🔄 Làm mới</button>
+    <div id="a_presence"></div>
     <div class="grp-sec">🏬 Cửa hàng</div>
     <div id="a_storeList"></div>
     <button class="btn-secondary btn-add-line" onclick="adminAddCat('store')">➕ Thêm cửa hàng</button>
@@ -1380,6 +1382,47 @@ function openAdminPanel() {
   renderAdminLists();
   document.getElementById('adminModal').classList.add('open');
 }
+function agoText(ms) {
+  var s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + ' giây';
+  var m = Math.round(s / 60);
+  if (m < 60) return m + ' phút';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + ' giờ ' + (m % 60) + ' phút';
+  return Math.floor(h / 24) + ' ngày';
+}
+function loadPresence() {
+  var box = document.getElementById('a_presence');
+  box.innerHTML = '<div class="hint">⏳ Đang tải...</div>';
+  if (!hasServer()) { box.innerHTML = '<div class="hint">(Demo)</div>'; return; }
+  google.script.run
+    .withSuccessHandler(function(d) {
+      var now = d.now, users = d.users || [];
+      users.forEach(function(u){ u.online = (now - u.lastSeen) <= d.onlineMs; });
+      users.sort(function(a, b){ return a.online !== b.online ? (a.online ? -1 : 1) : b.lastSeen - a.lastSeen; });
+      if (!users.length) { box.innerHTML = '<div class="hint">Chưa có dữ liệu</div>'; return; }
+      box.innerHTML = users.map(function(u) {
+        var status = u.online
+          ? '<span style="color:#1e7e34;font-weight:800">🟢 Online</span>'
+          : '<span style="color:#888;font-weight:800">⚫ Offline cách đây ' + agoText(now - u.lastSeen) + '</span>';
+        var hasLoc = u.lat !== '' && u.lat !== null && u.lng !== '' && u.lng !== null;
+        var loc = hasLoc
+          ? '<a href="https://www.google.com/maps?q=' + u.lat + ',' + u.lng + '" target="_blank">📍 Xem vị trí</a>'
+          : '<span style="color:#aaa">Chưa có vị trí</span>';
+        var act = u.act ? ('Thao tác cuối: ' + escHtml(u.act) + ' (' + agoText(now - u.actAt) + ' trước)') : 'Chưa có thao tác nhập';
+        return '<div class="cat-row" style="display:block"><div style="font-weight:800;word-break:break-all">' + escHtml(u.email) + '</div>'
+          + '<div style="font-size:.7rem;margin:2px 0">' + status + '</div>'
+          + '<div style="font-size:.68rem;color:#666">' + act + '</div>'
+          + '<div style="font-size:.7rem;margin-top:2px">' + loc + '</div></div>';
+      }).join('');
+    })
+    .withFailureHandler(function(err) { box.innerHTML = '<div class="msg error">' + escHtml(err.message) + '</div>'; })
+    .getPresence();
+}
+
+
+
+  
 function closeAdminPanel() { document.getElementById('adminModal').classList.remove('open'); }
 function doAdminLogout() {
   var t = adminToken;
