@@ -54,6 +54,7 @@ private const val SHIM_JS = """
     getStockBundle:     ['getStockBundle', V, function (a) { return { date: a[0] }; }],
     getHistoryBundle:   ['getHistoryBundle', V, function (a) { return {}; }],
     getStockHistory:    ['getStockHistory', V, function (a) { return {}; }],
+    getPresence:        ['getPresence', V, function (a) { return {}; }],
     addNewStore:        ['addNewStore', V, function (a) { return { name: a[0] }; }],
     addNewProduct:      ['addNewProduct', V, function (a) { return { name: a[0] }; }],
     updateSales:        ['updateSales', V, function (a) { return { rowIndex: a[0], rec: a[1] }; }],
@@ -128,7 +129,14 @@ class MainActivity : AppCompatActivity() {
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        webView.webViewClient = WebViewClient()
+                webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
+                val url = request?.url ?: return false
+                if (url.host == "appassets.local") return false
+                try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e: Exception) { }
+                return true
+            }
+        }
         webView.webChromeClient = object : WebChromeClient() {
             override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
                 AlertDialog.Builder(this@MainActivity).setMessage(message)
@@ -158,6 +166,7 @@ class MainActivity : AppCompatActivity() {
         val html = assets.open("index.html").bufferedReader().use { it.readText() }
             .replaceFirst("<head>", "<head><script>$SHIM_JS</script>")
         webView.loadDataWithBaseURL("https://appassets.local/", html, "text/html", "UTF-8", null)
+                askLocationConsent()
     }
 
     inner class Bridge {
@@ -200,6 +209,91 @@ class MainActivity : AppCompatActivity() {
             SessionManager.saveLogin(this, t, SessionManager.getEmail(this) ?: "")
         }
         return idToken
+    }
+
+        // ===== ONLINE + VỊ TRÍ =====
+    private var hbJob: Job? = null
+
+    private val locPermLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { }
+
+    private fun hasLocPerm(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun askLocationConsent() {
+        if (hasLocPerm()) return
+        val prefs = getSharedPreferences("session", MODE_PRIVATE)
+        if (prefs.getBoolean("locAsked", false)) return
+        AlertDialog.Builder(this)
+            .setTitle("Chia sẻ hoạt động & vị trí")
+            .setMessage("Khi bạn đang mở ứng dụng, quản lý sẽ thấy bạn đang online, vị trí gần nhất và thao tác cuối cùng của bạn. Khi tắt ứng dụng sẽ không ghi vị trí.")
+            .setPositiveButton("Đồng ý") { _, _ ->
+                prefs.edit().putBoolean("locAsked", true).apply()
+                locPermLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            }
+            .setNegativeButton("Không") { _, _ -> prefs.edit().putBoolean("locAsked", true).apply() }
+            .setCancelable(false)
+            .show()
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun lastKnownLocation(): Location? {
+        if (!hasLocPerm()) return null
+        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+        return lm.getProviders(true).mapNotNull {
+            try { lm.getLastKnownLocation(it) } catch (e: Exception) { null }
+        }.maxByOrNull { it.time }
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private suspend fun currentLocation(): Location? {
+        if (!hasLocPerm()) return null
+        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val provider = when {
+            fine && lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
+            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
+            else -> return lastKnownLocation()
+        }
+        val loc = withTimeoutOrNull(8000L) {
+            suspendCancellableCoroutine<Location?> { cont ->
+                val cs = CancellationSignal()
+                cont.invokeOnCancellation { cs.cancel() }
+                LocationManagerCompat.getCurrentLocation(lm, provider, cs, ContextCompat.getMainExecutor(this@MainActivity)) { l ->
+                    if (cont.isActive) cont.resume(l)
+                }
+            }
+        }
+        return loc ?: lastKnownLocation()
+    }
+
+    private fun startHeartbeat() {
+        if (!::webView.isInitialized) return
+        hbJob?.cancel()
+        hbJob = lifecycleScope.launch {
+            while (true) {
+                val p = JSONObject()
+                val loc = try { currentLocation() } catch (e: Exception) { null }
+                if (loc != null) {
+                    p.put("loc", JSONObject()
+                        .put("lat", loc.latitude).put("lng", loc.longitude).put("acc", loc.accuracy.toDouble()))
+                }
+                try { ApiClient.call(execUrl, "heartbeat", freshToken(), p) } catch (e: Exception) { }
+                delay(60_000L)
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        startHeartbeat()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        hbJob?.cancel()
     }
 
     private fun goLogin() {
