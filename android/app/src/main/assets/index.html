@@ -2022,7 +2022,7 @@ function processReportRows(rows) {
 }
 function pollReports() {
   if (!hasServer()) return;
-  if (typeof _tokenValid === 'function' && !_tokenValid()) return;   // chưa đăng nhập Google thì khỏi hỏi
+  if (!window.AndroidBridge && typeof _tokenValid === 'function' && !_tokenValid()) return;   // chưa đăng nhập Google thì khỏi hỏi
   GAS_RUN
     .withSuccessHandler(function(rows) { processReportRows(rows || []); })
     .withFailureHandler(function() {})
