@@ -4,6 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quản Lý KPI Bán Hàng</title>
   <style>
     body {
       background-color: #f0f2f5;
@@ -248,7 +249,7 @@
         <textarea id="r_text" rows="16" readonly></textarea>
         <button class="btn-submit" onclick="copyReport()">📋 Copy báo cáo</button>
         <button class="btn-secondary btn-add-line" style="margin-top:8px;margin-bottom:0" onclick="loadReport()">🔄 Tải lại dữ liệu</button>
-                <div id="r_admin" style="margin-top:12px"></div>
+        <div id="r_admin" style="margin-top:12px"></div>
       </div>
 
     </div>
@@ -311,9 +312,11 @@
       </div>
     </div>
     <button class="btn-secondary btn-add-line" onclick="adminSaveSchedule()">💾 Lưu hẹn giờ</button>
+
     <div class="grp-sec">👥 Nhân viên online / offline</div>
     <button class="btn-secondary btn-add-line" onclick="loadPresence()">🔄 Làm mới</button>
     <div id="a_presence"></div>
+
     <div class="grp-sec">🏬 Cửa hàng</div>
     <div id="a_storeList"></div>
     <button class="btn-secondary btn-add-line" onclick="adminAddCat('store')">➕ Thêm cửa hàng</button>
@@ -340,6 +343,107 @@
   </div>
 </div>
 
+<!-- ===================== CẦU NỐI GITHUB PAGES -> GOOGLE APPS SCRIPT (có đăng nhập Google) ===================== -->
+<div class="overlay" id="loginModal">
+  <div class="modal">
+    <h3>🔐 Đăng nhập Google</h3>
+    <div class="hint">Đăng nhập bằng Gmail để hệ thống ghi nhận người nhập liệu.</div>
+    <div id="gsiBtn" style="display:flex;justify-content:center;margin:12px 0;min-height:44px"></div>
+    <div id="loginMsg" class="hint"></div>
+  </div>
+</div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+var API_URL = 'https://script.google.com/macros/s/AKfycbxx2K7nZcPtTdYVWv16g_FM5N4YwKd2_PW0qnrgTwNxEUnYcUO5LASCSooUiS7h__c3/exec';
+var WEB_CLIENT_ID = '136393256935-ccl6rjnubbvo2e2gouf1j5pc4jnvg5sr.apps.googleusercontent.com';
+
+var _idToken = '', _tokenExp = 0, _waiters = [], _gsiReady = false;
+
+function _parseJwt(t) {
+  try {
+    var b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    return JSON.parse(decodeURIComponent(escape(atob(b))));
+  } catch (e) { return null; }
+}
+function _tokenValid() { return !!_idToken && Date.now() < _tokenExp - 60000; }
+function _setToken(t) {
+  var p = _parseJwt(t);
+  if (!p) return;
+  _idToken = t; _tokenExp = p.exp * 1000;
+  try { localStorage.setItem('gid_token', t); } catch (e) {}
+  document.getElementById('loginModal').classList.remove('open');
+  var w = _waiters; _waiters = [];
+  w.forEach(function(f) { f(); });
+}
+(function loadSaved() {
+  try {
+    var t = localStorage.getItem('gid_token');
+    var p = t && _parseJwt(t);
+    if (p && Date.now() < p.exp * 1000 - 60000) { _idToken = t; _tokenExp = p.exp * 1000; }
+  } catch (e) {}
+})();
+
+function _initGsi(cb) {
+  if (window.google && google.accounts && google.accounts.id) {
+    if (!_gsiReady) {
+      google.accounts.id.initialize({ client_id: WEB_CLIENT_ID, callback: function(r) { _setToken(r.credential); }, auto_select: true });
+      _gsiReady = true;
+    }
+    cb();
+  } else {
+    setTimeout(function() { _initGsi(cb); }, 200);
+  }
+}
+function _showLogin() {
+  document.getElementById('loginModal').classList.add('open');
+  _initGsi(function() {
+    var box = document.getElementById('gsiBtn');
+    box.innerHTML = '';
+    google.accounts.id.renderButton(box, { theme: 'filled_blue', size: 'large', text: 'signin_with', locale: 'vi' });
+  });
+}
+function _ensureToken(cb) {
+  if (_tokenValid()) { cb(); return; }
+  _waiters.push(cb);
+  _showLogin();
+}
+
+function makeRun(ok, fail) {
+  return new Proxy({}, { get: function(_, name) {
+    if (name === 'withSuccessHandler') return function(f) { return makeRun(f, fail); };
+    if (name === 'withFailureHandler') return function(f) { return makeRun(ok, f); };
+    return function() {
+      var args = Array.prototype.slice.call(arguments);
+      var run = function(retry) {
+        _ensureToken(function() {
+          fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ fn: String(name), args: args, idToken: _idToken })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && d.error) {
+                if (!retry && /đăng nhập Google/i.test(d.error)) { _idToken = ''; _tokenExp = 0; run(true); return; }
+                if (fail) fail({ message: d.error });
+              } else if (ok) {
+                ok(d ? d.result : undefined);
+              }
+            })
+            .catch(function(e) { if (fail) fail({ message: e.message }); });
+        });
+      };
+      run(false);
+    };
+  }});
+}
+
+/* GAS_RUN: trong Apps Script dùng google.script.run thật; trên GitHub Pages dùng cầu nối; chưa cấu hình thì null (demo) */
+var GAS_RUN = (typeof google !== 'undefined' && google.script) ? google.script.run
+            : (API_URL.indexOf('DAN_URL') === -1 ? makeRun() : null);
+</script>
+
 <script>
 var isAdmin = false;
 var addModalType = null;
@@ -351,7 +455,7 @@ var adminEmails = ['itviettel098@gmail.com', 'itviettel094@gmail.com', 'nguyenng
 var storesList = [];
 var productsList = [];
 
-function hasServer() { return !(typeof google === 'undefined' || !google.script); }
+function hasServer() { return !!GAS_RUN; }
 
 function todayStr() {
   var d = new Date();
@@ -408,7 +512,7 @@ function loadInit() {
     afterListsLoaded();
     return;
   }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(d) {
       storesList = (d.formData && d.formData.stores) || [];
       productsList = (d.formData && d.formData.products) || [];
@@ -519,7 +623,7 @@ function confirmAddModal() {
     return;
   }
 
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.indexOf('OK') === 0) {
         applyNewItem(isStore, val);
@@ -555,7 +659,7 @@ function switchView(view) {
 /* ===== BÁN HÀNG (kiểu thu ngân) ===== */
 var salesCart = [];          // các dòng đã thêm, chưa lưu
 var usedServer = [];         // sản phẩm đã lưu trong DB cho ngày + cửa hàng đang chọn
-var salesUsedMap = {};       // { cửa hàng: [sản phẩm đã nhập] } của ngày salesUsedDate (để chọn cửa hàng là có ngay)
+var salesUsedMap = {};       // { cửa hàng: [sản phẩm đã nhập] } của ngày salesUsedDate
 var salesUsedDate = '';
 var lastSalesStore = '';
 var lastSalesDate = '';
@@ -588,7 +692,7 @@ function syncSalesUsed() {
 }
 function fetchSalesUsed(date, cb) {
   if (!hasServer()) { if (cb) cb(); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(m) {
       if (document.getElementById('s_date').value !== date) return;   // đã đổi ngày, bỏ kết quả cũ
       salesUsedMap = m || {}; salesUsedDate = date;
@@ -674,7 +778,7 @@ function saveSalesEntry() {
   var btn = document.getElementById('s_saveBtn');
   btn.disabled = true; btn.textContent = 'ĐANG LƯU...';
 
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       if (res.ok) {
@@ -814,7 +918,7 @@ function syncStockStatus() {
 function fetchStockBundle(date, cb) {
   if (!date) { if (cb) cb(); return; }
   if (!hasServer()) { stockStatusLoaded = true; if (cb) cb(); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(b) {
       if (document.getElementById('k_date').value !== date) return;   // đã đổi ngày, bỏ kết quả cũ
       setStockBundle(b, date);
@@ -1004,7 +1108,7 @@ function saveStockEntry() {
   btn.disabled = true; btn.textContent = 'ĐANG LƯU...';
   var savedMode = stockMode;
 
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       if (res.ok) {
@@ -1050,7 +1154,7 @@ function loadHistory() {
     renderHistory();
     return;
   }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(b) {
       b = b || {};
       _salesRows = (b.sales || []).filter(function(r){ return !r.isDeleted; });
@@ -1212,7 +1316,7 @@ function loadReport() {
     return;
   }
   ta.value = '⏳ Đang tải dữ liệu...';
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(rows) {
       if (document.getElementById('r_date').value !== date) return;   // đã đổi ngày, bỏ kết quả cũ
       _reportStock = (rows || []).filter(function(r){ return !r.isDeleted; });
@@ -1282,7 +1386,7 @@ function renderReportAdmin() {
       }).join('')
     + '</tbody></table></div>';
 }
-  
+
 function copyReport() {
   var ta = document.getElementById('r_text');
   if (!ta.value || ta.value.indexOf('Đang tải') !== -1) { showToast('Chưa có báo cáo để copy.', 'error'); return; }
@@ -1311,6 +1415,7 @@ function setAdmin(on, token) {
   isAdmin = !!on;
   adminToken = on ? token : '';
   document.getElementById('adminStatus').textContent = isAdmin ? 'Chế độ: Admin ✅' : 'Chế độ: Nhân viên';
+  document.getElementById('gearBtn').classList.toggle('on', isAdmin);
   stockOverviewDate = '';
   salesUsedDate = '';
   applyNavLock();
@@ -1362,7 +1467,7 @@ function sendOtp() {
     return;
   }
   btn.disabled = true; btn.textContent = 'ĐANG GỬI...';
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.ok) {
         showOtpStep2(); startOtpCooldown(60);
@@ -1389,7 +1494,7 @@ function verifyOtp() {
   }
   var btn = document.getElementById('otpVerifyBtn');
   btn.disabled = true;
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       btn.disabled = false;
       if (res && res.ok) { closeOtpModal(); setAdmin(true, res.token); showToast('Đăng nhập admin thành công!', 'success'); }
@@ -1420,7 +1525,7 @@ function loadPresence() {
   var box = document.getElementById('a_presence');
   box.innerHTML = '<div class="hint">⏳ Đang tải...</div>';
   if (!hasServer()) { box.innerHTML = '<div class="hint">(Demo)</div>'; return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(d) {
       var now = d.now, users = d.users || [];
       users.forEach(function(u){ u.online = (now - u.lastSeen) <= d.onlineMs; });
@@ -1445,13 +1550,10 @@ function loadPresence() {
     .getPresence();
 }
 
-
-
-  
 function closeAdminPanel() { document.getElementById('adminModal').classList.remove('open'); }
 function doAdminLogout() {
   var t = adminToken;
-  if (hasServer() && t) google.script.run.adminLogout(t);
+  if (hasServer() && t) GAS_RUN.adminLogout(t);
   setAdmin(false);
   closeAdminPanel();
   showToast('Đã thoát chế độ admin.', 'info');
@@ -1503,7 +1605,7 @@ function adminSaveSchedule() {
     showToast('Đã lưu hẹn giờ.', 'success');
   };
   if (!hasServer()) { applyIt(sched); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.ok) applyIt(res.schedule);
       else adminFail((res && res.error) || 'Lỗi');
@@ -1515,7 +1617,7 @@ function adminSaveDelay() {
   var v = document.getElementById('a_delay').value;
   if (v === '' || Number(v) < 0 || Number(v) > 1440) { showToast('Số phút phải từ 0 đến 1440.', 'error'); return; }
   if (!hasServer()) { CLOSE_DELAY_MS = Number(v) * 60000; updateDelayTexts(); refreshStockMode(); showToast('(Demo) Đã lưu.', 'success'); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.ok) { CLOSE_DELAY_MS = res.minutes * 60000; updateDelayTexts(); refreshStockMode(); showToast('Đã lưu thời gian chờ: ' + delayLabel() + '.', 'success'); }
       else adminFail((res && res.error) || 'Lỗi');
@@ -1531,7 +1633,7 @@ function adminAddCat(type) {
   var list = catList(type);
   if (list.some(function(x){ return x.toUpperCase() === nn.toUpperCase(); })) { showToast('Tên đã tồn tại.', 'error'); return; }
   if (!hasServer()) { list.push(nn); afterCatalogChange(); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.indexOf('OK') === 0) { list.push(nn); afterCatalogChange(); showToast('Đã thêm.', 'success'); }
       else showToast((res && res.split('|')[1]) || 'Lỗi thêm mới', 'error');
@@ -1546,7 +1648,7 @@ function adminRenameCat(type, i) {
   if (!nn || nn === old) return;
   if (list.some(function(x, j){ return j !== i && x.toUpperCase() === nn.toUpperCase(); })) { showToast('Tên đã tồn tại.', 'error'); return; }
   if (!hasServer()) { list[i] = nn; afterCatalogChange(); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.ok) { list[i] = nn; afterCatalogChange(); showToast('Đã đổi tên.', 'success'); }
       else adminFail((res && res.error) || 'Lỗi');
@@ -1558,7 +1660,7 @@ function adminDeleteCat(type, i) {
   var list = catList(type), name = list[i];
   if (!confirm('Xoá "' + name + '" khỏi danh mục? (Lịch sử cũ vẫn được giữ lại)')) return;
   if (!hasServer()) { list.splice(i, 1); afterCatalogChange(); return; }
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.ok) { list.splice(i, 1); afterCatalogChange(); showToast('Đã xoá khỏi danh mục.', 'success'); }
       else adminFail((res && res.error) || 'Lỗi');
@@ -1614,15 +1716,15 @@ function confirmEdit() {
     closeEditModal();
     salesUsedDate = ''; stockOverviewDate = '';
     loadHistory();
-    loadReport();    
+    loadReport();
   };
   if (editingKind === 'sales') {
     var q = g('e_qty');
     if (q === '') { alert('Vui lòng nhập số lượng.'); return; }
-    google.script.run.withSuccessHandler(done).withFailureHandler(adminFail)
+    GAS_RUN.withSuccessHandler(done).withFailureHandler(adminFail)
       .updateSales(editingId, { date: date, store: store, product: product, qty: q, cashier: g('e_user') }, adminToken);
   } else {
-    google.script.run.withSuccessHandler(done).withFailureHandler(adminFail)
+    GAS_RUN.withSuccessHandler(done).withFailureHandler(adminFail)
       .updateStock(editingId, { date: date, store: store, product: product, tonDau: g('e_tondau'), tonCuoi: g('e_toncuoi'),
                                 cashierDau: g('e_userdau'), cashierCuoi: g('e_usercuoi') }, adminToken);
   }
@@ -1633,7 +1735,7 @@ function deleteEntry(kind, rowIndex) {
   if (!confirm('Bạn có chắc muốn xoá dòng dữ liệu này?')) return;
   if (!hasServer()) { showToast('(Demo) Đã xoá.', 'success'); return; }
   var fn = kind === 'sales' ? 'deleteSales' : 'deleteStock';
-  google.script.run
+  GAS_RUN
     .withSuccessHandler(function() { showToast('Đã xoá dữ liệu.', 'success'); salesUsedDate = ''; stockOverviewDate = ''; loadHistory(); })
     .withFailureHandler(adminFail)[fn](rowIndex, adminToken);
 }
