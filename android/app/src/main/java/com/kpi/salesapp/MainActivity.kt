@@ -62,6 +62,7 @@ private const val SHIM_JS = """
     getHistoryBundle:   ['getHistoryBundle', V, function (a) { return {}; }],
     getStockHistory:    ['getStockHistory', V, function (a) { return {}; }],
     getPresence:        ['getPresence', V, function (a) { return {}; }],
+    getStoreInfo:       ['getStoreInfo', V, function (a) { return {}; }],
     addNewStore:        ['addNewStore', V, function (a) { return { name: a[0] }; }],
     addNewProduct:      ['addNewProduct', V, function (a) { return { name: a[0] }; }],
     updateSales:        ['updateSales', V, function (a) { return { rowIndex: a[0], rec: a[1] }; }],
@@ -71,6 +72,7 @@ private const val SHIM_JS = """
     submitSalesBatch:   ['submitSalesBatch', D, function (a) { return a[0]; }],
     submitStockBatch:   ['submitStockBatch', D, function (a) { return a[0]; }],
     adminSetDelay:      ['adminSetDelay', D, function (a) { return { minutes: a[0] }; }],
+    adminSetSalesEnabled: ['adminSetSalesEnabled', D, function (a) { return { on: a[0] }; }],
     adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
     adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
     adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }]
