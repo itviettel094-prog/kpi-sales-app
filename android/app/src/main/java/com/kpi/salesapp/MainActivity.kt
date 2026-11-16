@@ -199,20 +199,7 @@ class MainActivity : AppCompatActivity() {
     private val notifPermLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private fun setupPush() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            val nm = getSystemService(NotificationManager::class.java)
-            val attr = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-            fun ch(id: String, name: String, raw: Int) {
-                val c = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
-                c.setSound(Uri.parse("android.resource://$packageName/$raw"), attr)
-                c.enableVibration(true)
-                nm.createNotificationChannel(c)
-            }
-            ch("sup_open_v1", "Báo cáo tồn đầu ca", R.raw.sup_ton_dau_ca)
-            ch("sup_close_v1", "Báo cáo tồn cuối ca", R.raw.sup_ton_cuoi)
-        }
+        PushChannels.ensure(this)
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
