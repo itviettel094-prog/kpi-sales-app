@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -56,6 +57,10 @@ dependencies {
     // Đăng nhập Google
     implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    // Thông báo đẩy Firebase
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-messaging")
 
     // Gọi API (OkHttp)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
