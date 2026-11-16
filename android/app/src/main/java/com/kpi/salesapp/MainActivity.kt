@@ -150,8 +150,14 @@ class MainActivity : AppCompatActivity() {
                 val u = request?.url
                 val path = u?.path
                 if (u != null && u.host == "appassets.local" && path != null && path.startsWith("/sounds/")) {
+                    // 1) tìm trong assets/sounds/  2) không có thì tìm trong res/raw (đổi "-" thành "_", vd. sup-ton-dau-ca.mp3 -> sup_ton_dau_ca)
                     try {
                         return android.webkit.WebResourceResponse("audio/mpeg", null, assets.open(path.trimStart('/')))
+                    } catch (e: Exception) { }
+                    try {
+                        val resName = path.removePrefix("/sounds/").substringBeforeLast('.').replace('-', '_')
+                        val id = resources.getIdentifier(resName, "raw", packageName)
+                        if (id != 0) return android.webkit.WebResourceResponse("audio/mpeg", null, resources.openRawResource(id))
                     } catch (e: Exception) { }
                 }
                 return super.shouldInterceptRequest(view, request)
