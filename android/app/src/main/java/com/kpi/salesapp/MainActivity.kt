@@ -1,6 +1,11 @@
 package com.kpi.salesapp
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.media.AudioAttributes
+import android.os.Build
+import com.google.firebase.messaging.FirebaseMessaging
 import androidx.activity.result.IntentSenderRequest
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
@@ -190,6 +195,38 @@ class MainActivity : AppCompatActivity() {
                 askLocationConsent()
     }
 
+    // ===== THÔNG BÁO ĐẨY (FCM) =====
+    private val notifPermLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private fun setupPush() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            val nm = getSystemService(NotificationManager::class.java)
+            val attr = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+            fun ch(id: String, name: String, raw: Int) {
+                val c = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
+                c.setSound(Uri.parse("android.resource://$packageName/$raw"), attr)
+                c.enableVibration(true)
+                nm.createNotificationChannel(c)
+            }
+            ch("sup_open_v1", "Báo cáo tồn đầu ca", R.raw.sup_ton_dau_ca)
+            ch("sup_close_v1", "Báo cáo tồn cuối ca", R.raw.sup_ton_cuoi)
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun registerPushToken() {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { t ->
+            lifecycleScope.launch {
+                try { ApiClient.call(execUrl, "registerPush", freshToken(), JSONObject().put("token", t)) } catch (e: Exception) { }
+            }
+        }
+    }
+
     inner class Bridge {
         @JavascriptInterface
         fun call(id: Int, action: String, paramsJson: String) {
@@ -328,6 +365,8 @@ class MainActivity : AppCompatActivity() {
 
         override fun onStart() {
         super.onStart()
+        setupPush()
+        registerPushToken()
         startHeartbeat()
         ensureGpsOn()
     }
