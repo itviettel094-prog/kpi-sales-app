@@ -134,6 +134,10 @@
     .cat-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; border:1px solid #c8e6c9; border-radius:8px; margin-bottom:5px; font-size:.78rem; font-weight:600; color:#1b5e20; text-align:left; }
     .btn-danger { flex:1; background:#dc3545; color:#fff; border:none; padding:9px 0; border-radius:8px; font-weight:800; font-size:.82rem; cursor:pointer; }
     #editFields .input-group { margin-bottom:8px; }
+  
+    /* ===== số đỏ trên nút Báo cáo ===== */
+    .nav button { position:relative; }
+    .badge { position:absolute; top:-8px; right:-4px; min-width:17px; height:17px; padding:0 4px; box-sizing:border-box; border-radius:999px; background:#dc3545; color:#fff; font-size:.62rem; font-weight:800; line-height:13px; text-align:center; border:2px solid #fff; }
   </style>
 </head>
 <body>
@@ -160,7 +164,7 @@
         <button id="navStock" class="active" onclick="switchView('stock')">1️⃣ Tồn Đầu/Cuối</button>
         <button id="navSales" onclick="switchView('sales')">2️⃣ KPI bán hàng</button>
         <button id="navHistory" onclick="switchView('history')">3️⃣ Lịch sử</button>
-        <button id="navReport" onclick="switchView('report')">4️⃣ Báo cáo</button>
+        <button id="navReport" onclick="switchView('report')">4️⃣ Báo cáo<span id="repBadge" class="badge" style="display:none">0</span></button>
       </div>
 
       <!-- VIEW: SALES (kiểu thu ngân) -->
@@ -504,6 +508,7 @@ window.onload = function() {
 };
 
 function showUser(email) {
+  myEmail = String(email || '').toLowerCase();
   var el = document.getElementById('userInfo');
   el.innerHTML = email
     ? '👤 ' + escHtml(email)
@@ -686,7 +691,7 @@ function switchView(view) {
   }
   if (view === 'sales' && !salesUsedDate) fetchSalesUsed(document.getElementById('s_date').value, function(){ renderSalesProductSelect(); });
   if (view === 'history') loadHistory();
-  if (view === 'report') loadReport();
+  if (view === 'report') { loadReport(); markReportsSeen(); }
 }
 
 /* ===== BÁN HÀNG (kiểu thu ngân) ===== */
@@ -1147,6 +1152,7 @@ function saveStockEntry() {
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       if (res.ok) {
+        playSound(savedMode === 'open' ? 'pgOpen' : 'pgClose');
         showToast('Đã lưu ' + res.count + ' dòng ' + (savedMode === 'open' ? 'TỒN ĐẦU' : 'TỒN CUỐI') + ' thành công!', 'success');
         stockCart = [];
         document.getElementById('k_qty').value = '';
@@ -1913,6 +1919,119 @@ function deleteEntry(kind, rowIndex) {
     .withSuccessHandler(function() { showToast('Đã xoá dữ liệu.', 'success'); salesUsedDate = ''; stockOverviewDate = ''; loadHistory(); })
     .withFailureHandler(adminFail)[fn](rowIndex, adminToken);
 }
+
+/* ===== ÂM THANH + SỐ ĐỎ BÁO CÁO ===== */
+var SOUND_FILES = {
+  pgOpen:   'sounds/pg-ton-dau.mp3',
+  pgClose:  'sounds/pg-ton-cuoi.mp3',
+  supOpen:  'sounds/sup-ton-dau-ca.mp3',
+  supClose: 'sounds/sup-ton-cuoi.mp3'
+};
+var _snd = {}, _sndQueue = [], _sndBusy = false, _sndUnlocked = false;
+Object.keys(SOUND_FILES).forEach(function(k) {
+  var a = new Audio(SOUND_FILES[k]); a.preload = 'auto'; _snd[k] = a;
+});
+
+// Trình duyệt chỉ cho phát tiếng sau khi người dùng chạm vào trang ít nhất 1 lần
+function unlockSounds() {
+  if (_sndUnlocked) return;
+  _sndUnlocked = true;
+  Object.keys(_snd).forEach(function(k) {
+    var a = _snd[k]; a.muted = true;
+    var done = function() { a.pause(); a.currentTime = 0; a.muted = false; };
+    var p = a.play();
+    if (p && p.then) p.then(done, function() { a.muted = false; _sndUnlocked = false; }); else done();
+  });
+}
+['click', 'touchstart', 'keydown'].forEach(function(ev) {
+  document.addEventListener(ev, unlockSounds, { passive: true });
+});
+
+function playSound(name) { _sndQueue.push(name); runSoundQueue(); }
+function runSoundQueue() {
+  if (_sndBusy || !_sndQueue.length) return;
+  var a = _snd[_sndQueue.shift()];
+  if (!a) { runSoundQueue(); return; }
+  _sndBusy = true;
+  var finish = function() {
+    if (!_sndBusy) return;
+    _sndBusy = false; a.onended = null; a.onerror = null;
+    runSoundQueue();
+  };
+  a.onended = finish; a.onerror = finish;
+  try { a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(finish); } catch (e) { finish(); }
+}
+
+var myEmail = '';
+var _repKnown = {}, _repBaseline = false, _lastRepKeys = {};
+function repSeenGet() { try { return JSON.parse(localStorage.getItem('repSeen') || '{}'); } catch (e) { return {}; } }
+function repSeenSet(m) { try { localStorage.setItem('repSeen', JSON.stringify(m)); } catch (e) {} }
+
+// Mỗi "báo cáo" = 1 cửa hàng + 1 loại (tồn đầu / tồn cuối) của ngày hôm nay
+function collectReportKeys(rows) {
+  var today = todayStr(), out = {};
+  function add(type, st, cashier) {
+    var k = today + '|' + st + '|' + type;
+    var o = out[k] || (out[k] = { own: false });
+    if (myEmail && String(cashier || '').trim().toLowerCase() === myEmail) o.own = true;
+  }
+  rows.forEach(function(r) {
+    if (r.isDeleted || r.date !== today) return;
+    var st = String(r.store).trim();
+    if (hasVal(r.tonDau))  add('open', st, r.cashierDau);
+    if (hasVal(r.tonCuoi)) add('close', st, r.cashierCuoi);
+  });
+  return out;
+}
+function updateRepBadge(keys) {
+  var seen = repSeenGet(), n = 0;
+  Object.keys(keys).forEach(function(k) { if (!seen[k] && !keys[k].own) n++; });
+  var b = document.getElementById('repBadge');
+  if (!b) return;
+  b.textContent = n > 99 ? '99+' : n;
+  b.style.display = n ? '' : 'none';
+}
+function markReportsSeen() {
+  var m = {};
+  Object.keys(_lastRepKeys).forEach(function(k) { m[k] = 1; });
+  repSeenSet(m);
+  updateRepBadge(_lastRepKeys);
+}
+function processReportRows(rows) {
+  var keys = collectReportKeys(rows);
+  _lastRepKeys = keys;
+  if (_repBaseline) {   // lần đầu chỉ ghi nhớ, không phát tiếng cho dữ liệu cũ
+    var hasOpen = false, hasClose = false;
+    Object.keys(keys).forEach(function(k) {
+      if (_repKnown[k] || keys[k].own) return;     // không phát tiếng cho chính mình lưu
+      if (/\|open$/.test(k)) hasOpen = true; else hasClose = true;
+    });
+    if (hasOpen) playSound('supOpen');
+    if (hasClose) playSound('supClose');
+  }
+  Object.keys(keys).forEach(function(k) { _repKnown[k] = 1; });
+  _repBaseline = true;
+
+  if (document.getElementById('view-report').style.display !== 'none') {
+    _reportStock = rows.filter(function(r) { return !r.isDeleted; });
+    buildReport();
+    markReportsSeen();        // đang xem tab Báo cáo thì không cần hiện số
+  } else {
+    updateRepBadge(keys);
+  }
+}
+function pollReports() {
+  if (!hasServer()) return;
+  if (typeof _tokenValid === 'function' && !_tokenValid()) return;   // chưa đăng nhập Google thì khỏi hỏi
+  GAS_RUN
+    .withSuccessHandler(function(rows) { processReportRows(rows || []); })
+    .withFailureHandler(function() {})
+    .getStockHistory();
+}
+window.addEventListener('load', function() {
+  setTimeout(pollReports, 4000);
+  setInterval(pollReports, 20000);   // 20 giây kiểm tra 1 lần
+});
 </script>
 </body>
 </html>
