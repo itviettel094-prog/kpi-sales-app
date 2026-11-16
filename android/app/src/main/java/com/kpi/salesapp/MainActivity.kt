@@ -1,240 +1,203 @@
 package com.kpi.salesapp
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
-import android.widget.*
+import android.webkit.JavascriptInterface
+import android.webkit.JsPromptResult
+import android.webkit.JsResult
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.EditText
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import kotlinx.coroutines.launch
-import org.json.JSONArray
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.*
+import kotlin.coroutines.resume
+
+// Đoạn JS này được chèn vào index.html để thay thế google.script.run (chỉ chạy được trong Apps Script)
+private const val SHIM_JS = """
+(function () {
+  var pending = {}, seq = 0;
+  window.__nativeResult = function (id, json) {
+    var cb = pending[id]; if (!cb) return; delete pending[id];
+    cb(JSON.parse(json));
+  };
+  function nativeCall(action, params) {
+    return new Promise(function (resolve) {
+      var id = ++seq; pending[id] = resolve;
+      AndroidBridge.call(id, action, JSON.stringify(params || {}));
+    });
+  }
+  var D = 'direct', V = 'data';
+  var API = {
+    getInitData:        ['getInitData', V, function (a) { return { date: a[0] }; }],
+    getSalesUsed:       ['getSalesUsed', V, function (a) { return { date: a[0] }; }],
+    getStockBundle:     ['getStockBundle', V, function (a) { return { date: a[0] }; }],
+    getHistoryBundle:   ['getHistoryBundle', V, function (a) { return {}; }],
+    getStockHistory:    ['getStockHistory', V, function (a) { return {}; }],
+    addNewStore:        ['addNewStore', V, function (a) { return { name: a[0] }; }],
+    addNewProduct:      ['addNewProduct', V, function (a) { return { name: a[0] }; }],
+    updateSales:        ['updateSales', V, function (a) { return { rowIndex: a[0], rec: a[1] }; }],
+    deleteSales:        ['deleteSales', V, function (a) { return { rowIndex: a[0] }; }],
+    updateStock:        ['updateStock', V, function (a) { return { rowIndex: a[0], rec: a[1] }; }],
+    deleteStock:        ['deleteStock', V, function (a) { return { rowIndex: a[0] }; }],
+    submitSalesBatch:   ['submitSalesBatch', D, function (a) { return a[0]; }],
+    submitStockBatch:   ['submitStockBatch', D, function (a) { return a[0]; }],
+    adminSetDelay:      ['adminSetDelay', D, function (a) { return { minutes: a[0] }; }],
+    adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
+    adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
+    adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }]
+  };
+  function run(name, args, ok, fail) {
+    ok = ok || function () {};
+    fail = fail || function (e) { console.error(e); };
+    if (name === 'adminLogout') { ok('OK'); return; }
+    if (name === 'requestAdminOtp' || name === 'verifyAdminOtp') {
+      ok({ ok: false, error: 'Trong app, quyền admin được xác định theo email Google đã đăng nhập.' });
+      return;
+    }
+    var spec = API[name];
+    if (!spec) { fail(new Error('Chưa hỗ trợ trong app: ' + name)); return; }
+    nativeCall(spec[0], spec[2](args)).then(function (res) {
+      if (spec[1] === 'direct') ok(res);
+      else if (res && res.ok) ok(res.data);
+      else fail(new Error((res && res.error) || 'Lỗi không xác định'));
+    });
+  }
+  function makeRunner(ok, fail) {
+    return new Proxy({}, {
+      get: function (t, name) {
+        if (name === 'withSuccessHandler') return function (f) { return makeRunner(f, fail); };
+        if (name === 'withFailureHandler') return function (f) { return makeRunner(ok, f); };
+        return function () { run(name, Array.prototype.slice.call(arguments), ok, fail); };
+      }
+    });
+  }
+  window.google = { script: { run: makeRunner(null, null) } };
+  window.addEventListener('load', function () {
+    nativeCall('isAdmin', {}).then(function (r) {
+      if (r && r.ok && r.isAdmin && typeof setAdmin === 'function') setAdmin(true, 'native');
+    });
+  });
+})();
+"""
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var webView: WebView
     private lateinit var execUrl: String
-    private lateinit var idToken: String
+    private lateinit var googleClient: GoogleSignInClient
+    private var idToken: String = ""
+    private var tokenTime: Long = 0L
 
-    private var stores: List<String> = emptyList()
-    private var products: List<String> = emptyList()
-
-    // Giỏ hàng tạm (chưa lưu) — mỗi phần tử: Triple(product, qty, mode?) dùng Map cho gọn
-    private val stockCart = mutableListOf<MutableMap<String, Any>>()
-    private val salesCart = mutableListOf<MutableMap<String, Any>>()
-
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
 
         execUrl = getString(R.string.exec_url)
         idToken = SessionManager.getIdToken(this) ?: run { goLogin(); return }
 
-        findViewById<TextView>(R.id.userEmail).text = "👤 " + (SessionManager.getEmail(this) ?: "")
-        findViewById<Button>(R.id.btnLogout).setOnClickListener {
-            SessionManager.clear(this)
-            goLogin()
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.web_client_id))
+            .requestEmail()
+            .build()
+        googleClient = GoogleSignIn.getClient(this, gso)
+
+        webView = WebView(this)
+        webView.fitsSystemWindows = true
+        setContentView(webView)
+
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.webViewClient = WebViewClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
+                AlertDialog.Builder(this@MainActivity).setMessage(message)
+                    .setPositiveButton("OK") { _, _ -> result.confirm() }
+                    .setOnCancelListener { result.cancel() }.show()
+                return true
+            }
+            override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
+                AlertDialog.Builder(this@MainActivity).setMessage(message)
+                    .setPositiveButton("OK") { _, _ -> result.confirm() }
+                    .setNegativeButton("Huỷ") { _, _ -> result.cancel() }
+                    .setOnCancelListener { result.cancel() }.show()
+                return true
+            }
+            override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: JsPromptResult): Boolean {
+                val input = EditText(this@MainActivity)
+                input.setText(defaultValue ?: "")
+                AlertDialog.Builder(this@MainActivity).setMessage(message).setView(input)
+                    .setPositiveButton("OK") { _, _ -> result.confirm(input.text.toString()) }
+                    .setNegativeButton("Huỷ") { _, _ -> result.cancel() }
+                    .setOnCancelListener { result.cancel() }.show()
+                return true
+            }
         }
+        webView.addJavascriptInterface(Bridge(), "AndroidBridge")
 
-        setupNav()
-        setupDefaults()
-        loadInitData()
+        val html = assets.open("index.html").bufferedReader().use { it.readText() }
+            .replaceFirst("<head>", "<head><script>$SHIM_JS</script>")
+        webView.loadDataWithBaseURL("https://appassets.local/", html, "text/html", "UTF-8", null)
+    }
 
-        findViewById<Button>(R.id.kAddLine).setOnClickListener { addStockLine() }
-        findViewById<Button>(R.id.kSave).setOnClickListener { saveStock() }
-        findViewById<Button>(R.id.sAddLine).setOnClickListener { addSalesLine() }
-        findViewById<Button>(R.id.sSave).setOnClickListener { saveSales() }
+    inner class Bridge {
+        @JavascriptInterface
+        fun call(id: Int, action: String, paramsJson: String) {
+            runOnUiThread {
+                lifecycleScope.launch {
+                    val token = freshToken()
+                    val res: JSONObject = try {
+                        ApiClient.call(execUrl, action, token, JSONObject(paramsJson))
+                    } catch (e: Exception) {
+                        JSONObject().put("ok", false).put("error", "Không kết nối được server: ${e.message}")
+                    }
+                    if (res.optString("error").startsWith("Phiên đăng nhập")) {
+                        Toast.makeText(this@MainActivity, "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Toast.LENGTH_LONG).show()
+                        SessionManager.clear(this@MainActivity)
+                        goLogin()
+                        return@launch
+                    }
+                    val quoted = JSONObject.quote(res.toString())
+                        .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+                    webView.evaluateJavascript("window.__nativeResult($id, $quoted);", null)
+                }
+            }
+        }
+    }
+
+    // ID token Google chỉ sống ~1 giờ nên tự làm mới ngầm khi đã cũ
+    private suspend fun freshToken(): String {
+        val now = System.currentTimeMillis()
+        if (idToken.isNotEmpty() && now - tokenTime < 40 * 60 * 1000L) return idToken
+        val t = suspendCancellableCoroutine<String?> { cont ->
+            googleClient.silentSignIn()
+                .addOnSuccessListener { acc -> cont.resume(acc.idToken) }
+                .addOnFailureListener { cont.resume(null) }
+        }
+        if (t != null) {
+            idToken = t
+            tokenTime = now
+            SessionManager.saveLogin(this, t, SessionManager.getEmail(this) ?: "")
+        }
+        return idToken
     }
 
     private fun goLogin() {
-        startActivity(android.content.Intent(this, LoginActivity::class.java))
+        startActivity(Intent(this, LoginActivity::class.java))
         finish()
     }
 
-    private fun setupNav() {
-        val views = mapOf(
-            R.id.navStock to R.id.viewStock,
-            R.id.navSales to R.id.viewSales,
-            R.id.navHistory to R.id.viewHistory
-        )
-        views.forEach { (btnId, viewId) ->
-            findViewById<Button>(btnId).setOnClickListener {
-                views.forEach { (_, vId) ->
-                    findViewById<LinearLayout>(vId).visibility =
-                        if (vId == viewId) android.view.View.VISIBLE else android.view.View.GONE
-                }
-                if (viewId == R.id.viewHistory) loadHistory()
-            }
-        }
-    }
-
-    private fun setupDefaults() {
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        findViewById<EditText>(R.id.kDate).setText(today)
-        findViewById<EditText>(R.id.sDate).setText(today)
-
-        val modeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("Tồn đầu (open)", "Tồn cuối (close)"))
-        findViewById<Spinner>(R.id.kMode).adapter = modeAdapter
-    }
-
-    private fun loadInitData() {
-        lifecycleScope.launch {
-            val today = findViewById<EditText>(R.id.kDate).text.toString()
-            val res = safeCall("getInitData", JSONObject().put("date", today))
-            if (!res.optBoolean("ok", false)) {
-                toast("Lỗi tải dữ liệu: " + res.optString("error"))
-                return@launch
-            }
-            val data = res.getJSONObject("data")
-            val formData = data.optJSONObject("formData")
-            stores = jsonArrToList(formData?.optJSONArray("stores"))
-            products = jsonArrToList(formData?.optJSONArray("products"))
-
-            val storeAdapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, stores)
-            findViewById<Spinner>(R.id.kStore).adapter = storeAdapter
-            findViewById<Spinner>(R.id.sStore).adapter = storeAdapter
-
-            val productAdapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, products)
-            findViewById<Spinner>(R.id.kProduct).adapter = productAdapter
-            findViewById<Spinner>(R.id.sProduct).adapter = productAdapter
-        }
-    }
-
-    // ================= TỒN KHO =================
-    private fun addStockLine() {
-        val product = (findViewById<Spinner>(R.id.kProduct).selectedItem as? String) ?: return
-        val qtyStr = findViewById<EditText>(R.id.kQty).text.toString()
-        val qty = qtyStr.toDoubleOrNull()
-        if (qty == null) { toast("Số lượng không hợp lệ"); return }
-        val mode = if (findViewById<Spinner>(R.id.kMode).selectedItemPosition == 0) "open" else "close"
-
-        stockCart.add(mutableMapOf("product" to product, "qty" to qty, "mode" to mode))
-        findViewById<EditText>(R.id.kQty).setText("")
-        renderStockCart()
-    }
-
-    private fun renderStockCart() {
-        val box = findViewById<LinearLayout>(R.id.kCartList)
-        box.removeAllViews()
-        stockCart.forEachIndexed { i, item ->
-            val tv = TextView(this)
-            tv.text = "${i + 1}. ${item["product"]} — SL: ${item["qty"]} (${item["mode"]})"
-            tv.setPadding(0, 8, 0, 8)
-            box.addView(tv)
-        }
-    }
-
-    private fun saveStock() {
-        if (stockCart.isEmpty()) { toast("Chưa có dòng nào để lưu"); return }
-        val date = findViewById<EditText>(R.id.kDate).text.toString()
-        val store = findViewById<Spinner>(R.id.kStore).selectedItem as? String
-        if (date.isBlank() || store == null) { toast("Chọn ngày và cửa hàng"); return }
-
-        val items = JSONArray()
-        stockCart.forEach {
-            val o = JSONObject()
-            o.put("product", it["product"])
-            o.put("qty", it["qty"])
-            o.put("mode", it["mode"])
-            items.put(o)
-        }
-        val params = JSONObject().put("date", date).put("store", store).put("items", items)
-
-        lifecycleScope.launch {
-            val res = safeCall("submitStockBatch", params)
-            if (res.optBoolean("ok", false)) {
-                toast("Đã lưu ${res.optInt("count")} dòng tồn kho")
-                stockCart.clear()
-                renderStockCart()
-            } else {
-                setMsg(R.id.kMsg, res.optString("error", "Lỗi không xác định"))
-            }
-        }
-    }
-
-    // ================= BÁN HÀNG =================
-    private fun addSalesLine() {
-        val product = (findViewById<Spinner>(R.id.sProduct).selectedItem as? String) ?: return
-        val qtyStr = findViewById<EditText>(R.id.sQty).text.toString()
-        val qty = qtyStr.toDoubleOrNull()
-        if (qty == null) { toast("Số lượng không hợp lệ"); return }
-
-        salesCart.add(mutableMapOf("product" to product, "qty" to qty))
-        findViewById<EditText>(R.id.sQty).setText("")
-        renderSalesCart()
-    }
-
-    private fun renderSalesCart() {
-        val box = findViewById<LinearLayout>(R.id.sCartList)
-        box.removeAllViews()
-        salesCart.forEachIndexed { i, item ->
-            val tv = TextView(this)
-            tv.text = "${i + 1}. ${item["product"]} — SL: ${item["qty"]}"
-            tv.setPadding(0, 8, 0, 8)
-            box.addView(tv)
-        }
-    }
-
-    private fun saveSales() {
-        if (salesCart.isEmpty()) { toast("Chưa có dòng nào để lưu"); return }
-        val date = findViewById<EditText>(R.id.sDate).text.toString()
-        val store = findViewById<Spinner>(R.id.sStore).selectedItem as? String
-        if (date.isBlank() || store == null) { toast("Chọn ngày và cửa hàng"); return }
-
-        val items = JSONArray()
-        salesCart.forEach {
-            val o = JSONObject()
-            o.put("product", it["product"])
-            o.put("qty", it["qty"])
-            items.put(o)
-        }
-        val params = JSONObject().put("date", date).put("store", store).put("items", items)
-
-        lifecycleScope.launch {
-            val res = safeCall("submitSalesBatch", params)
-            if (res.optBoolean("ok", false)) {
-                toast("Đã lưu ${res.optInt("count")} dòng bán hàng")
-                salesCart.clear()
-                renderSalesCart()
-            } else {
-                setMsg(R.id.sMsg, res.optString("error", "Lỗi không xác định"))
-            }
-        }
-    }
-
-    // ================= LỊCH SỬ (khung cơ bản — TODO: làm giao diện gộp như bản web) =================
-    private fun loadHistory() {
-        val tv = findViewById<TextView>(R.id.historyText)
-        tv.text = "Đang tải..."
-        lifecycleScope.launch {
-            val res = safeCall("getHistoryBundle", JSONObject())
-            if (!res.optBoolean("ok", false)) {
-                tv.text = "Lỗi: " + res.optString("error")
-                return@launch
-            }
-            val data = res.getJSONObject("data")
-            val sales = data.optJSONArray("sales") ?: JSONArray()
-            val stock = data.optJSONArray("stock") ?: JSONArray()
-            tv.text = "Bán hàng: ${sales.length()} dòng\nTồn kho: ${stock.length()} dòng\n\n(TODO: hiển thị chi tiết gộp theo ngày/cửa hàng)"
-        }
-    }
-
-    // ================= HELPERS =================
-    private suspend fun safeCall(action: String, params: JSONObject): JSONObject {
-        return try {
-            ApiClient.call(execUrl, action, idToken, params)
-        } catch (e: Exception) {
-            JSONObject().put("ok", false).put("error", "Không kết nối được server: ${e.message}")
-        }
-    }
-
-    private fun jsonArrToList(arr: JSONArray?): List<String> {
-        if (arr == null) return emptyList()
-        return (0 until arr.length()).map { arr.getString(it) }
-    }
-
-    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-
-    private fun setMsg(id: Int, msg: String) {
-        findViewById<TextView>(id).text = msg
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
 }
