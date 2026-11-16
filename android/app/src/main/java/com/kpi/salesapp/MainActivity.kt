@@ -138,7 +138,19 @@ class MainActivity : AppCompatActivity() {
 
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        webView.settings.mediaPlaybackRequiresUserGesture = false   // cho phép phát tiếng không cần chạm
                 webView.webViewClient = object : WebViewClient() {
+            // Phục vụ file âm thanh nằm trong assets/sounds/ cho trang web trong app
+            override fun shouldInterceptRequest(view: WebView?, request: android.webkit.WebResourceRequest?): android.webkit.WebResourceResponse? {
+                val u = request?.url
+                val path = u?.path
+                if (u != null && u.host == "appassets.local" && path != null && path.startsWith("/sounds/")) {
+                    try {
+                        return android.webkit.WebResourceResponse("audio/mpeg", null, assets.open(path.trimStart('/')))
+                    } catch (e: Exception) { }
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
             override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
                 val url = request?.url ?: return false
                 if (url.host == "appassets.local") return false
