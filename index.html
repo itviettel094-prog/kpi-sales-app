@@ -242,10 +242,15 @@
         <div class="row row-1">
           <div class="input-group"><label class="input-label">Ngày</label><input type="date" id="r_date" onchange="loadReport()"></div>
         </div>
+        <div class="row row-1">
+          <div class="input-group"><label class="input-label">Điểm bán</label><select id="r_store" onchange="onReportStoreChange()"><option value="__all__">Tất cả điểm bán</option></select></div>
+        </div>
         <div class="row row-2">
           <div class="input-group"><label class="input-label">Họ tên</label><input type="text" id="r_name" oninput="onReportMetaChange()"></div>
           <div class="input-group"><label class="input-label">Khu vực</label><input type="text" id="r_area" oninput="onReportMetaChange()"></div>
         </div>
+        <div id="r_meta"></div>
+        <div id="r_off"></div>
         <textarea id="r_text" rows="16" readonly></textarea>
         <button class="btn-submit" onclick="copyReport()">📋 Copy báo cáo</button>
         <button class="btn-secondary btn-add-line" style="margin-top:8px;margin-bottom:0" onclick="loadReport()">🔄 Tải lại dữ liệu</button>
@@ -288,6 +293,9 @@
   <div class="modal">
     <h3>⚙️ Quản trị (Admin)</h3>
     <div class="hint">Admin được Sửa/Xoá mọi dòng trong Lịch sử, nhập Tồn đầu/cuối không bị khoá giờ, và chỉnh các cài đặt bên dưới.</div>
+
+    <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
+    <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
 
     <div class="grp-sec">⏱️ Thời gian chờ nhập Tồn cuối (phút)</div>
     <div class="row row-ds">
@@ -537,7 +545,7 @@ function applyNavLock() {
   var info = document.getElementById('lockInfo');
   if (locked) {
     info.textContent = '⏳ Bạn đã nhập Tồn đầu. Nút Tồn đầu/cuối sẽ hiện lại lúc ' + fmtClock(myLockUntil) + '.';
-    if (document.getElementById('view-stock').style.display !== 'none') switchView('sales');
+    if (document.getElementById('view-stock').style.display !== 'none') switchView((salesEnabled || isAdmin) ? 'sales' : 'history');
   } else {
     info.textContent = '';
     if (!isAdmin) myLockUntil = 0;
@@ -639,6 +647,31 @@ function confirmAddModal() {
       resetSelectIfCancelled();
       document.getElementById('modal').classList.remove('open');
     })[fn](val);
+}
+
+/* ===== ẨN / HIỆN NÚT "KPI BÁN HÀNG" (admin bật tắt, lưu trên server) ===== */
+var salesEnabled = true;
+function applySalesNav() {
+  var show = salesEnabled || isAdmin;
+  document.getElementById('navSales').style.display = show ? '' : 'none';
+  if (!show && document.getElementById('view-sales').style.display !== 'none') {
+    switchView(isMyLocked() ? 'history' : 'stock');
+  }
+}
+function adminSaveSalesVisible() {
+  var on = document.getElementById('a_salesVisible').checked;
+  var apply = function(v) {
+    salesEnabled = v; applySalesNav();
+    showToast(v ? 'Đã HIỆN nút KPI bán hàng.' : 'Đã ẨN nút KPI bán hàng với nhân viên.', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { document.getElementById('a_salesVisible').checked = salesEnabled; adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { document.getElementById('a_salesVisible').checked = salesEnabled; adminFail(err); })
+    .adminSetSalesEnabled(on, adminToken);
 }
 
 /* ===== ĐIỀU HƯỚNG ===== */
@@ -788,13 +821,14 @@ function saveSalesEntry() {
       } else {
         showMsg('s_msg', res.error || 'Lỗi không xác định', 'error');
         fetchSalesUsed(date, function(){ renderSalesProductSelect(); });
+        fetchStockBundle(document.getElementById('k_date').value);   // cập nhật lại trạng thái bật/tắt nút KPI bán hàng
       }
     })
     .withFailureHandler(function(err) {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       showMsg('s_msg', 'Lỗi: ' + err.message, 'error');
     })
-    .submitSalesBatch({ date: date, store: store, items: salesCart });
+    .submitSalesBatch({ date: date, store: store, adminToken: adminToken, items: salesCart });
 }
 
 /* ===== TỒN KHO (kiểu thu ngân) ===== */
@@ -906,6 +940,7 @@ function setStockBundle(b, date) {
   stockOverviewDate = date;
   if (b.delayMs !== undefined && b.delayMs !== null) { CLOSE_DELAY_MS = b.delayMs; updateDelayTexts(); }
   if (b.schedule) { stockSchedule = b.schedule; updateSchedText(); }
+  if (b.salesEnabled !== undefined) { salesEnabled = !!b.salesEnabled; applySalesNav(); }
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
   myLockUntil = b.until || 0;
   applyNavLock();
@@ -1317,6 +1352,10 @@ function loadReport() {
   }
   ta.value = '⏳ Đang tải dữ liệu...';
   GAS_RUN
+    .withSuccessHandler(function(m) { storeInfo = m || {}; _metaKey = ''; buildReport(); })
+    .withFailureHandler(function() {})
+    .getStoreInfo();
+  GAS_RUN
     .withSuccessHandler(function(rows) {
       if (document.getElementById('r_date').value !== date) return;   // đã đổi ngày, bỏ kết quả cũ
       _reportStock = (rows || []).filter(function(r){ return !r.isDeleted; });
@@ -1328,10 +1367,94 @@ function loadReport() {
     })
     .getStockHistory();
 }
+/* Địa chỉ + PG lấy từ Google Sheet "Danh mục" (cột C = Địa Chỉ, D = PG, E = PG2, cùng dòng với cửa hàng) */
+var storeInfo = {};          // { cửa hàng: {addr, pgs:[PG, PG2]} }
+function pgChoice(st) {
+  var info = storeInfo[st] || { pgs: [] };
+  var m = {};
+  try { m = JSON.parse(localStorage.getItem('pgChoice') || '{}'); } catch (e) {}
+  return (m[st] && info.pgs.indexOf(m[st]) !== -1) ? m[st] : (info.pgs[0] || '');
+}
+function onPgChoice(el) {
+  var m = {};
+  try { m = JSON.parse(localStorage.getItem('pgChoice') || '{}'); } catch (e) {}
+  m[el.getAttribute('data-st')] = el.value;
+  try { localStorage.setItem('pgChoice', JSON.stringify(m)); } catch (e) {}
+  buildReport();
+}
+var _metaKey = '';
+function renderReportMeta(stores) {
+  var box = document.getElementById('r_meta');
+  if (!box) return;
+  var key = stores.join('|');
+  if (key === _metaKey) return;
+  _metaKey = key;
+  box.innerHTML = stores.map(function(st, i) {
+    var x = storeInfo[st] || { addr: '', pgs: [] };
+    var cur = pgChoice(st), pgHtml;
+    if (x.pgs.length > 1) {
+      pgHtml = '<select data-st="' + escHtml(st) + '" onchange="onPgChoice(this)">'
+        + x.pgs.map(function(n) { return '<option value="' + escHtml(n) + '"' + (n === cur ? ' selected' : '') + '>' + escHtml(n) + '</option>'; }).join('')
+        + '</select>';
+    } else {
+      pgHtml = '<div style="text-align:center;font-weight:700;font-size:.86rem;color:#1b5e20">' + escHtml(x.pgs[0] || '(chưa có PG trong Sheet)') + '</div>';
+    }
+    return '<div class="sch-box"><div class="grp-sec" style="margin-top:0">Điểm bán ' + (i + 1) + ': ' + escHtml(st) + '</div>'
+      + '<div class="hint" style="text-align:left;margin-bottom:6px">📍 ' + escHtml(x.addr || '(chưa có địa chỉ trong Sheet)') + '</div>'
+      + '<div class="input-group"><label class="input-label">Họ tên PG' + (x.pgs.length > 1 ? ' (chọn)' : '') + '</label>' + pgHtml + '</div></div>';
+  }).join('');
+}
+
+var reportStore = '__all__';
+var _rsKey = '';
+function updateReportStoreSelect(stores) {
+  var sel = document.getElementById('r_store');
+  if (!sel) return;
+  if (reportStore !== '__all__' && stores.indexOf(reportStore) === -1) reportStore = '__all__';
+  var key = stores.join('|') + '#' + reportStore;
+  if (key === _rsKey) return;
+  _rsKey = key;
+  sel.innerHTML = '<option value="__all__">Tất cả điểm bán</option>'
+    + stores.map(function(st) { return '<option value="' + escHtml(st) + '">' + escHtml(st) + '</option>'; }).join('');
+  sel.value = reportStore;
+}
+function onReportStoreChange() {
+  reportStore = document.getElementById('r_store').value;
+  buildReport();
+}
+
+/* Điểm bán chưa nhập: tick OFF = điểm nghỉ; không tick = CHƯA NHẬP
+   (Báo cáo Tồn cuối: điểm bán không có Tồn đầu trong ngày => tự động OFF, không cần tick) */
+function getOffMap() { try { return JSON.parse(localStorage.getItem('reportOff') || '{}'); } catch (e) { return {}; } }
+function onOffToggle(el) {
+  var m = getOffMap(), k = el.getAttribute('data-k');
+  if (el.checked) m[k] = true; else delete m[k];
+  try { localStorage.setItem('reportOff', JSON.stringify(m)); } catch (e) {}
+  buildReport();
+}
+var _offKey = '';
+function renderReportOff(missing, date) {
+  var box = document.getElementById('r_off');
+  if (!box) return;
+  var key = date + '#' + reportMode + '#' + missing.join('|');
+  if (key === _offKey) return;
+  _offKey = key;
+  if (!missing.length) { box.innerHTML = ''; return; }
+  var m = getOffMap();
+  box.innerHTML = '<div class="sch-box"><div class="grp-sec" style="margin-top:0">⚠️ Điểm bán chưa nhập (' + missing.length + ')</div>'
+    + '<div class="hint" style="text-align:left;margin-bottom:6px">Tick <b>OFF</b> nếu điểm bán nghỉ / không hoạt động. Không tick = ghi "CHƯA NHẬP".</div>'
+    + missing.map(function(st) {
+        var k = date + '|' + st;
+        return '<label class="sw"><input type="checkbox" data-k="' + escHtml(k) + '"' + (m[k] ? ' checked' : '') + ' onchange="onOffToggle(this)"> <span>' + escHtml(st) + ' — OFF</span></label>';
+      }).join('')
+    + '</div>';
+}
+
 function buildReport() {
   var date = document.getElementById('r_date').value;
-  var key = reportMode === 'open' ? 'tonDau' : 'tonCuoi';
-  var label = reportMode === 'open' ? 'Tồn đầu' : 'Tồn cuối';
+  var isClose = reportMode === 'close';
+  var key = isClose ? 'tonCuoi' : 'tonDau';
+  var label = isClose ? 'Tồn cuối' : 'Tồn đầu';
   var rows = _reportStock
     .filter(function(r){ return r.date === date && hasVal(r[key]); })
     .sort(function(a, b){ return a.rowIndex - b.rowIndex; });
@@ -1342,28 +1465,77 @@ function buildReport() {
     if (!map[st]) { map[st] = []; stores.push(st); }
     map[st].push(r);
   });
+  updateReportStoreSelect(stores);
+  var shown = reportStore === '__all__' ? stores : stores.filter(function(st){ return st === reportStore; });
+  renderReportMeta(shown);
+
+  // Các điểm bán đã có Tồn đầu trong ngày (dùng cho báo cáo cuối ca)
+  var openedMap = {};
+  _reportStock.forEach(function(r) {
+    if (r.date === date && hasVal(r.tonDau)) openedMap[String(r.store).trim()] = true;
+  });
 
   var total = Math.max(storesList.length, stores.length);
-  var out = [];
-  out.push('BÁO CÁO CHECKIN');
-  out.push('Ngày: ' + fmtDMY(date).replace(/-/g, '/'));
-  out.push('Họ Tên: ' + document.getElementById('r_name').value.trim());
-  out.push('Khu vực: ' + document.getElementById('r_area').value.trim());
-  out.push('Số điểm PG check: ' + stores.length + '/' + total);
+  var SEP = '      ____________________';   // đường kẻ ngang, muốn đổi kiểu thì sửa ở đây
 
-  if (!stores.length) {
+  var out = [];
+  out.push(isClose ? 'BÁO CÁO BÁN HÀNG VÀ CHECKOUT' : 'BÁO CÁO CHECKIN');
+  out.push('Ngày: ' + fmtDMY(date).replace(/-/g, '/'));
+  out.push('Họ Tên Sup: ' + document.getElementById('r_name').value.trim() + '.');
+  out.push('Khu vực: ' + document.getElementById('r_area').value.trim() + '.');
+  out.push('Số điểm PG check: ' + shown.length + '/' + total);
+
+  // Điểm bán chưa có dữ liệu của loại báo cáo đang chọn
+  var missingAll = (reportStore === '__all__') ? storesList.filter(function(st){ return stores.indexOf(st) === -1; }) : [];
+  // Báo cáo cuối ca: điểm nào không có Tồn đầu => mặc định OFF (không cần tick)
+  var missing = missingAll.filter(function(st){ return !(isClose && !openedMap[st]); });
+  renderReportOff(missing, date);
+  var offMap = getOffMap();
+
+  // Mỗi điểm bán là 1 khối (mảng các dòng)
+  var blocks = [];
+  shown.forEach(function(st, i) {
+    var x = storeInfo[st] || {};
+    var b = [];
+    b.push('Điểm bán ' + (i + 1) + ': ' + st);
+    b.push('Địa Chỉ: ' + (x.addr || ''));
+    b.push('Họ Tên PG: ' + pgChoice(st));
+    b.push('');
+    if (isClose) {
+      b.push('Báo cáo số bán trong ca:');
+      map[st].forEach(function(r) {
+        var sold = hasVal(r.tonDau) ? (Number(r.tonDau) - Number(r.tonCuoi)) : '?';
+        b.push('- ' + String(r.product).trim() + ' : ' + sold + ' thùng.');
+      });
+      b.push('');
+      b.push('Báo cáo tồn cuối ca:');
+      map[st].forEach(function(r) {
+        b.push('- ' + String(r.product).trim() + ' : ' + r.tonCuoi + ' thùng.');
+      });
+    } else {
+      b.push('Báo cáo tồn đầu ca:');
+      map[st].forEach(function(r) {
+        b.push('- ' + String(r.product).trim() + ' : ' + r.tonDau + ' thùng.');
+      });
+    }
+    blocks.push(b);
+  });
+  missingAll.forEach(function(st, k) {
+    var autoOff = isClose && !openedMap[st];
+    var isOff = autoOff || !!offMap[date + '|' + st];
+    blocks.push(['Điểm bán ' + (shown.length + k + 1) + ': ' + st + ' - ' + (isOff ? 'OFF' : 'CHƯA NHẬP')]);
+  });
+
+  if (!blocks.length) {
     out.push('');
     out.push('(Chưa có dữ liệu ' + label + ' cho ngày này)');
   }
-  stores.forEach(function(st, i) {
+  blocks.forEach(function(b, i) {
     out.push('');
-    out.push('Điểm bán ' + (i + 1) + ': ' + st);
-    out.push('');
-    out.push(label + ':');
-    map[st].forEach(function(r) {
-      out.push('- ' + String(r.product).trim() + ' : ' + r[key] + ' thùng');
-    });
+    b.forEach(function(line) { out.push(line); });
+    if (i < blocks.length - 1) { out.push(''); out.push(SEP); }   // kẻ ngang giữa các điểm bán, không kẻ sau điểm cuối
   });
+
   document.getElementById('r_text').value = out.join('\n');
   renderReportAdmin();
 }
@@ -1418,6 +1590,7 @@ function setAdmin(on, token) {
   document.getElementById('gearBtn').classList.toggle('on', isAdmin);
   stockOverviewDate = '';
   salesUsedDate = '';
+  applySalesNav();
   applyNavLock();
   renderStockProductSelect();
   refreshStockMode();
@@ -1507,6 +1680,7 @@ function verifyOtp() {
 /* --- Bảng quản trị --- */
 function openAdminPanel() {
   document.getElementById('a_delay').value = Math.round(CLOSE_DELAY_MS / 60000);
+  document.getElementById('a_salesVisible').checked = salesEnabled;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
