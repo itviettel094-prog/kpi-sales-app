@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#28a745"
+        android:padding="12dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/userEmail"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#ffffff"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnLogout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Thoát" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button android:id="@+id/navStock" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="1️⃣ Tồn kho" android:textSize="10sp" />
+        <Button android:id="@+id/navSales" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2️⃣ Bán hàng" android:textSize="10sp" />
+        <Button android:id="@+id/navHistory" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="3️⃣ Lịch sử" android:textSize="10sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ====== VIEW: TỒN KHO ====== -->
+            <LinearLayout android:id="@+id/viewStock" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+
+                <TextView android:text="Ngày" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <EditText android:id="@+id/kDate" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="yyyy-MM-dd" />
+
+                <TextView android:text="Cửa hàng" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <Spinner android:id="@+id/kStore" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:text="Loại nhập" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <Spinner android:id="@+id/kMode" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:text="Sản phẩm" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <Spinner android:id="@+id/kProduct" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:text="Số lượng" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <EditText android:id="@+id/kQty" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+
+                <Button android:id="@+id/kAddLine" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="➕ Thêm dòng" android:layout_marginTop="8dp" />
+
+                <LinearLayout android:id="@+id/kCartList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp" />
+
+                <Button android:id="@+id/kSave" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✅ Lưu Tồn Kho" android:layout_marginTop="12dp" android:backgroundTint="#28a745" />
+
+                <TextView android:id="@+id/kMsg" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <!-- ====== VIEW: BÁN HÀNG ====== -->
+            <LinearLayout android:id="@+id/viewSales" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+
+                <TextView android:text="Ngày" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+                <EditText android:id="@+id/sDate" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="yyyy-MM-dd" />
+
+                <TextView android:text="Cửa hàng" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <Spinner android:id="@+id/sStore" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:text="Sản phẩm" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <Spinner android:id="@+id/sProduct" android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+                <TextView android:text="Số lượng bán" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"/>
+                <EditText android:id="@+id/sQty" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+
+                <Button android:id="@+id/sAddLine" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="➕ Thêm dòng" android:layout_marginTop="8dp" />
+
+                <LinearLayout android:id="@+id/sCartList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp" />
+
+                <Button android:id="@+id/sSave" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="✅ Lưu Bán Hàng" android:layout_marginTop="12dp" android:backgroundTint="#28a745" />
+
+                <TextView android:id="@+id/sMsg" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
+            </LinearLayout>
+
+            <!-- ====== VIEW: LỊCH SỬ (khung sẵn, làm tiếp sau) ====== -->
+            <LinearLayout android:id="@+id/viewHistory" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:id="@+id/historyText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Đang tải lịch sử..." />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>
