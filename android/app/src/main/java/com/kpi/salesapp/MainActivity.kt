@@ -1,5 +1,12 @@
 package com.kpi.salesapp
+
 import android.Manifest
+import androidx.activity.result.IntentSenderRequest
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.Priority
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
@@ -216,7 +223,26 @@ class MainActivity : AppCompatActivity() {
 
     private val locPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
+    ) { ensureGpsOn() }
+
+    private val gpsResolutionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
     ) { }
+
+    // Nếu GPS đang tắt thì hiện hộp "Bật vị trí" của hệ thống (bấm 1 lần là bật)
+    private fun ensureGpsOn() {
+        if (!hasLocPerm()) return
+        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60_000L).build()
+        val settingsReq = LocationSettingsRequest.Builder().addLocationRequest(req).build()
+        LocationServices.getSettingsClient(this).checkLocationSettings(settingsReq)
+            .addOnFailureListener { e ->
+                if (e is ResolvableApiException) {
+                    try {
+                        gpsResolutionLauncher.launch(IntentSenderRequest.Builder(e.resolution).build())
+                    } catch (ex: Exception) { }
+                }
+            }
+    }
 
     private fun hasLocPerm(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -286,9 +312,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStart() {
+        override fun onStart() {
         super.onStart()
         startHeartbeat()
+        ensureGpsOn()
     }
 
     override fun onStop() {
