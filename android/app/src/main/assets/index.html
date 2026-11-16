@@ -1311,11 +1311,13 @@ function setAdmin(on, token) {
   isAdmin = !!on;
   adminToken = on ? token : '';
   document.getElementById('adminStatus').textContent = isAdmin ? 'Chế độ: Admin ✅' : 'Chế độ: Nhân viên';
-stockOverviewDate = ''; loadHistory(); loadReport(); })
+  stockOverviewDate = '';
+  salesUsedDate = '';
   applyNavLock();
   renderStockProductSelect();
   refreshStockMode();
   if (document.getElementById('view-history').style.display !== 'none') loadHistory();
+  if (document.getElementById('view-report').style.display !== 'none') loadReport();
 }
 function adminFail(err) {
   var m = String((err && err.message) || err || 'Lỗi');
