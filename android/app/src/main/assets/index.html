@@ -1380,6 +1380,7 @@ function openAdminPanel() {
   document.getElementById('a_delay').value = Math.round(CLOSE_DELAY_MS / 60000);
   fillScheduleForm();
   renderAdminLists();
+  loadPresence();
   document.getElementById('adminModal').classList.add('open');
 }
 function agoText(ms) {
