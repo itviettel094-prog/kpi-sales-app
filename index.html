@@ -55,6 +55,9 @@
     .row-2 { grid-template-columns:1fr 1fr; }
     .row-1 { grid-template-columns:1fr; }
     .row-ds { grid-template-columns:1fr 1fr; }
+    .row-3 { grid-template-columns:1fr 1fr 1fr; gap:6px; }
+    .row-3 input[type=time], .row-3 select { padding:8px 2px; font-size:.7rem; }
+    .row-3 .input-label { font-size:.58rem; }
     .row-ds input[type=date], .row-ds select { padding:8px 4px; font-size:.8rem; }
     .input-group { display:flex; flex-direction:column; }
     .input-label { color:#28a745; font-weight:700; font-size:.68rem; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; text-align:center; }
@@ -251,22 +254,18 @@
           <button id="r_modeOpen" class="active" onclick="setReportMode('open')">Tồn đầu</button>
           <button id="r_modeClose" onclick="setReportMode('close')">Tồn cuối</button>
         </div>
-        <div class="row row-1">
+        <div class="row row-ds">
           <div class="input-group"><label class="input-label">Ngày</label><input type="date" id="r_date" onchange="loadReport()"></div>
-        </div>
-        <div class="row row-1">
           <div class="input-group"><label class="input-label">Điểm bán</label><select id="r_store" onchange="onReportStoreChange()"><option value="__all__">Tất cả điểm bán</option></select></div>
         </div>
-        <div class="row row-1" id="r_supRow" style="display:none">
-          <div class="input-group"><label class="input-label">Sup phụ trách</label><select id="r_sup" onchange="onReportSupChange()"><option value="">Tất cả Sup</option></select></div>
+        <div class="row row-3" id="r_shiftRow">
+          <div class="input-group" id="r_supRow" style="display:none"><label class="input-label">Sup phụ trách</label><select id="r_sup" onchange="onReportSupChange()"><option value="">Tất cả Sup</option></select></div>
+          <div class="input-group"><label class="input-label">Ca làm: từ</label><input type="time" id="r_shiftFrom" onchange="onReportMetaChange()"></div>
+          <div class="input-group"><label class="input-label">Đến</label><input type="time" id="r_shiftTo" onchange="onReportMetaChange()"></div>
         </div>
-        <div class="row row-2">
+        <div class="row row-2" id="r_nameRow" style="display:none">
           <div class="input-group"><label class="input-label">Họ tên</label><input type="text" id="r_name" oninput="onReportMetaChange()"></div>
           <div class="input-group"><label class="input-label">Khu vực</label><input type="text" id="r_area" oninput="onReportMetaChange()"></div>
-        </div>
-        <div class="row row-ds" id="r_shiftRow">
-          <div class="input-group"><label class="input-label">Ca làm việc: từ</label><input type="time" id="r_shiftFrom" onchange="onReportMetaChange()"></div>
-          <div class="input-group"><label class="input-label">Đến</label><input type="time" id="r_shiftTo" onchange="onReportMetaChange()"></div>
         </div>
         <div id="r_meta"></div>
         <div id="r_off"></div>
@@ -320,6 +319,9 @@
       <label class="sw"><input type="checkbox" id="a_supOwn" onchange="adminSaveViewScope()"> <span>Sup chỉ xem điểm bán / PG của Sup đó</span></label>
       <div class="hint" style="text-align:left;margin:0">Bật: Trần Thị Dung và Nguyễn Ngọc Tài chỉ xem điểm bán thuộc Sup của mình (theo cột "Sup" trong sheet Danh mục). Tắt: các Sup xem được tất cả.</div>
     </div>
+
+    <div class="grp-sec">📝 Báo cáo Checkin</div>
+    <label class="sw"><input type="checkbox" id="a_showName" onchange="adminToggleNameRow()"> <span>Hiện ô Họ tên &amp; Khu vực</span></label>
 
     <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
@@ -656,6 +658,8 @@ function renderSupSelects() {
   var kRow = document.getElementById('k_supRow'), rRow = document.getElementById('r_supRow');
   if (kRow) kRow.style.display = sups.length ? '' : 'none';
   if (rRow) rRow.style.display = sups.length ? '' : 'none';
+  var sr = document.getElementById('r_shiftRow');
+  if (sr) sr.style.gridTemplateColumns = sups.length ? '' : '1fr 1fr';
   var k = document.getElementById('k_sup'), r = document.getElementById('r_sup');
   if (!k || !r) return;
   var forced = forcedSup(sups);
@@ -1556,6 +1560,7 @@ function initReport() {
   document.getElementById('r_shiftFrom').value = (meta.shiftFrom !== undefined) ? meta.shiftFrom : REPORT_DEFAULT.shiftFrom;
   document.getElementById('r_shiftTo').value = (meta.shiftTo !== undefined) ? meta.shiftTo : REPORT_DEFAULT.shiftTo;
   document.getElementById('r_date').value = todayStr();
+  applyNameRow();
   applyShiftVisibility();
 }
 function onReportMetaChange() {
@@ -1959,6 +1964,7 @@ function verifyOtp() {
 /* --- Bảng quản trị --- */
 function openAdminPanel() {
   document.getElementById('a_delay').value = Math.round(CLOSE_DELAY_MS / 60000);
+  document.getElementById('a_showName').checked = (lsGet('showNameRow') === '1');
   document.getElementById('a_salesVisible').checked = salesEnabled;
   document.getElementById('a_viewOwn').checked = viewOwnOnly;
   document.getElementById('a_supOwn').checked = supOwnOnly;
@@ -2005,6 +2011,14 @@ function loadPresence() {
     .getPresence();
 }
 
+function applyNameRow() {
+  var row = document.getElementById('r_nameRow');
+  if (row) row.style.display = (lsGet('showNameRow') === '1') ? '' : 'none';
+}
+function adminToggleNameRow() {
+  lsSet('showNameRow', document.getElementById('a_showName').checked ? '1' : '0');
+  applyNameRow();
+}
 function closeAdminPanel() { document.getElementById('adminModal').classList.remove('open'); }
 function doAdminLogout() {
   var t = adminToken;
