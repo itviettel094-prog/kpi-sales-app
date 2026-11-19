@@ -210,7 +210,8 @@
           <div class="input-group"><label class="input-label">Ngày</label><input type="date" id="k_date" onchange="onStockHeaderChange()"></div>
           <div class="input-group"><label class="input-label">Cửa Hàng</label><select id="k_store" onchange="handleSelectChange('store', this); onStockHeaderChange();"></select></div>
         </div>
-        <div id="k_modeBanner"></div>
+        <div id="k_supStores"></div>
+<div id="k_modeBanner"></div>
 
         <div id="k_formArea">
           <div class="row row-2">
@@ -614,6 +615,7 @@ function renderSupSelects() {
   r.innerHTML = '<option value="">Tất cả Sup</option>' + opts;
   k.value = sups.indexOf(kv) !== -1 ? kv : '';
   r.value = sups.indexOf(rv) !== -1 ? rv : '';
+  renderStockSupStores();
 }
 function loadStoreInfo(cb) {
   if (!hasServer()) { if (cb) cb(); return; }
@@ -627,7 +629,20 @@ function loadStoreInfo(cb) {
     .withFailureHandler(function() { if (cb) cb(); })
     .getStoreInfo();
 }
+function renderStockSupStores() {
+  var box = document.getElementById('k_supStores');
+  if (!box) return;
+  var sup = document.getElementById('k_sup').value;
+  if (!sup) { box.innerHTML = ''; return; }
+  var list = storesOfSup(sup, true);
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="hint" style="text-align:left;background:#e8f5e9;border:1px dashed #28a745;border-radius:10px;padding:8px 10px">'
+    + '<b>' + escHtml(sup) + '</b> phụ trách:<br>'
+    + list.map(function(st, i) { return (i + 1) + '. ' + escHtml(st); }).join('<br>')
+    + '</div>';
+}
 function onStockSupChange() {
+  renderStockSupStores();
   lsSet('kSup', document.getElementById('k_sup').value);
   var storeEl = document.getElementById('k_store');
   var cur = storeEl.value;
@@ -639,7 +654,7 @@ function onReportSupChange() {
   var sup = document.getElementById('r_sup').value;
   lsSet('rSup', sup);
   if (sup) {
-    document.getElementById('r_name').value = sup;   // tự điền Họ tên Sup
+    document.getElementById('r_name').value = /^sup\b/i.test(sup) ? sup : 'Sup ' + sup;
     var area = '';
     Object.keys(storeInfo).some(function(st) {
       var x = storeInfo[st] || {};
@@ -1428,7 +1443,7 @@ function toggleGroup(i) {
 /* ===== BÁO CÁO CHECKIN (để copy gửi nhóm) ===== */
 var reportMode = 'open';        // open = Tồn đầu | close = Tồn cuối
 var _reportStock = [];
-var REPORT_DEFAULT = { name: 'Sup Đặng Minh Ngọc', area: 'Hà Nội 2 - Chương Mỹ', shiftFrom: '15:00', shiftTo: '19:00' };
+var REPORT_DEFAULT = { name: 'Sup Đặng Minh Ngọc', area: 'Hà Nội 2 - Chương Mỹ', shiftFrom: '15:00', shiftTo: '20:00' };
 
 function initReport() {
   var meta = {};
