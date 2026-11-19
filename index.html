@@ -1638,8 +1638,10 @@ function buildReport() {
   out.push(isClose ? 'BÁO CÁO BÁN HÀNG VÀ CHECKOUT' : 'BÁO CÁO CHECKIN');
   out.push('Ngày: ' + fmtDMY(date).replace(/-/g, '/'));
 
+  var shFrom = document.getElementById('r_shiftFrom').value;
+  var shTo = document.getElementById('r_shiftTo').value;
+  if (shFrom && shTo) out.push('Ca làm việc: ' + shFrom + ' - ' + shTo);
   out.push('Họ Tên Sup: ' + document.getElementById('r_name').value.trim() + '.');
-  out.push('Khu vực: ' + document.getElementById('r_area').value.trim() + '.');
   out.push('Số điểm PG check: ' + shown.length + '/' + total);
 
   // Điểm bán chưa có dữ liệu của loại báo cáo đang chọn
