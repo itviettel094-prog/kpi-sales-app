@@ -253,6 +253,10 @@
           <div class="input-group"><label class="input-label">Họ tên</label><input type="text" id="r_name" oninput="onReportMetaChange()"></div>
           <div class="input-group"><label class="input-label">Khu vực</label><input type="text" id="r_area" oninput="onReportMetaChange()"></div>
         </div>
+        <div class="row row-ds" id="r_shiftRow">
+          <div class="input-group"><label class="input-label">Ca làm việc: từ</label><input type="time" id="r_shiftFrom" onchange="onReportMetaChange()"></div>
+          <div class="input-group"><label class="input-label">Đến</label><input type="time" id="r_shiftTo" onchange="onReportMetaChange()"></div>
+        </div>
         <div id="r_meta"></div>
         <div id="r_off"></div>
         <textarea id="r_text" rows="16" readonly></textarea>
@@ -1320,26 +1324,37 @@ function toggleGroup(i) {
 /* ===== BÁO CÁO CHECKIN (để copy gửi nhóm) ===== */
 var reportMode = 'open';        // open = Tồn đầu | close = Tồn cuối
 var _reportStock = [];
-var REPORT_DEFAULT = { name: 'Sup Đặng Minh Ngọc', area: 'Hà Nội 2 - Chương Mỹ' };
+var REPORT_DEFAULT = { name: 'Sup Đặng Minh Ngọc', area: 'Hà Nội 2 - Chương Mỹ', shiftFrom: '15:00', shiftTo: '19:00' };
 
 function initReport() {
   var meta = {};
   try { meta = JSON.parse(localStorage.getItem('reportMeta') || '{}'); } catch (e) {}
   document.getElementById('r_name').value = meta.name || REPORT_DEFAULT.name;
   document.getElementById('r_area').value = meta.area || REPORT_DEFAULT.area;
+  document.getElementById('r_shiftFrom').value = (meta.shiftFrom !== undefined) ? meta.shiftFrom : REPORT_DEFAULT.shiftFrom;
+  document.getElementById('r_shiftTo').value = (meta.shiftTo !== undefined) ? meta.shiftTo : REPORT_DEFAULT.shiftTo;
   document.getElementById('r_date').value = todayStr();
+  applyShiftVisibility();
 }
 function onReportMetaChange() {
   try {
     localStorage.setItem('reportMeta', JSON.stringify({
       name: document.getElementById('r_name').value,
-      area: document.getElementById('r_area').value
+      area: document.getElementById('r_area').value,
+      shiftFrom: document.getElementById('r_shiftFrom').value,
+      shiftTo: document.getElementById('r_shiftTo').value
     }));
   } catch (e) {}
   buildReport();
 }
+// Ô chọn giờ làm việc chỉ hiện ở báo cáo Tồn đầu
+function applyShiftVisibility() {
+  var row = document.getElementById('r_shiftRow');
+  if (row) row.style.display = (reportMode === 'open') ? '' : 'none';
+}
 function setReportMode(m) {
   reportMode = m;
+  applyShiftVisibility();
   document.getElementById('r_modeOpen').classList.toggle('active', m === 'open');
   document.getElementById('r_modeClose').classList.toggle('active', m === 'close');
   buildReport();
@@ -1487,6 +1502,9 @@ function buildReport() {
   var out = [];
   out.push(isClose ? 'BÁO CÁO BÁN HÀNG VÀ CHECKOUT' : 'BÁO CÁO CHECKIN');
   out.push('Ngày: ' + fmtDMY(date).replace(/-/g, '/'));
+  var sFrom = document.getElementById('r_shiftFrom').value;
+  var sTo = document.getElementById('r_shiftTo').value;
+  if (!isClose && sFrom && sTo) out.push('Ca làm việc ' + sFrom + ' - ' + sTo);
   out.push('Họ Tên Sup: ' + document.getElementById('r_name').value.trim() + '.');
   out.push('Khu vực: ' + document.getElementById('r_area').value.trim() + '.');
   out.push('Số điểm PG check: ' + shown.length + '/' + total);
