@@ -62,6 +62,7 @@
       width:100%; padding:8px 10px; border:1.5px solid #28a745; border-radius:8px;
       color:#1b5e20; font-weight:600; box-sizing:border-box; outline:none; font-size:.86rem; background:#fff; text-align:center;
     }
+    select:disabled { background:#f1f8f2; opacity:.85; }
     input::placeholder { color:#a0c8a8; font-weight:400; }
 
     .btn-submit { background:#28a745; color:#fff; border:none; padding:11px 16px; border-radius:10px; font-weight:800; font-size:.88rem; cursor:pointer; text-transform:uppercase; display:block; width:100%; margin-top:4px; }
@@ -136,7 +137,7 @@
     .cat-row { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; border:1px solid #c8e6c9; border-radius:8px; margin-bottom:5px; font-size:.78rem; font-weight:600; color:#1b5e20; text-align:left; }
     .btn-danger { flex:1; background:#dc3545; color:#fff; border:none; padding:9px 0; border-radius:8px; font-weight:800; font-size:.82rem; cursor:pointer; }
     #editFields .input-group { margin-bottom:8px; }
-  
+
     /* ===== số đỏ trên nút Báo cáo ===== */
     .nav button { position:relative; }
     .badge { position:absolute; top:-8px; right:-4px; min-width:17px; height:17px; padding:0 4px; box-sizing:border-box; border-radius:999px; background:#dc3545; color:#fff; font-size:.62rem; font-weight:800; line-height:13px; text-align:center; border:2px solid #fff; }
@@ -161,6 +162,7 @@
     <div class="card-body">
 
       <div class="hint" id="lockInfo" style="margin-top:-4px;color:#8a6d00;font-weight:700"></div>
+      <div class="hint" id="scopeInfo" style="margin-top:-4px;color:#1565c0;font-weight:700"></div>
 
       <div class="nav">
         <button id="navStock" class="active" onclick="switchView('stock')">1️⃣ Tồn Đầu/Cuối</button>
@@ -292,7 +294,7 @@
 <div class="overlay" id="otpModal">
   <div class="modal">
     <h3>🔐 Đăng nhập Admin</h3>
-    <div class="hint">Bấm "Gửi mã OTP", hệ thống sẽ gửi mã 6 số tới <b>tất cả</b> các địa chỉ Gmail dưới đây. Mã có hiệu lực 5 phút.</div>
+    <div class="hint">Bấm "Gửi mã OTP", hệ thống sẽ gửi mã 6 số tới Gmail của <b>Admin</b> dưới đây. Mã có hiệu lực 5 phút.</div>
     <div id="otpEmails" class="otp-emails"></div>
     <button class="btn-secondary btn-add-line" id="otpSendBtn" onclick="sendOtp()">📧 Gửi mã OTP</button>
     <div id="otpStep2" style="display:none">
@@ -309,7 +311,15 @@
 <div class="overlay" id="adminModal">
   <div class="modal">
     <h3>⚙️ Quản trị (Admin)</h3>
-    <div class="hint">Admin được Sửa/Xoá mọi dòng trong Lịch sử, nhập Tồn đầu/cuối không bị khoá giờ, và chỉnh các cài đặt bên dưới.</div>
+    <div class="hint">Admin có mọi quyền: Sửa/Xoá mọi dòng trong Lịch sử, nhập Tồn đầu/cuối không bị khoá giờ, luôn xem được dữ liệu của tất cả, và chỉnh các cài đặt bên dưới.</div>
+
+    <div class="grp-sec">👁️ Phân quyền xem dữ liệu</div>
+    <div class="sch-box">
+      <label class="sw"><input type="checkbox" id="a_viewOwn" onchange="adminSaveViewScope()"> <span>Nhân viên chỉ xem dữ liệu do chính mình nhập</span></label>
+      <div class="hint" style="text-align:left;margin:0 0 8px">Bật: ai nhập thì chỉ xem được dòng của người đó. Tắt: nhân viên xem được dữ liệu của nhau.</div>
+      <label class="sw"><input type="checkbox" id="a_supOwn" onchange="adminSaveViewScope()"> <span>Sup chỉ xem điểm bán / PG của Sup đó</span></label>
+      <div class="hint" style="text-align:left;margin:0">Bật: Trần Thị Dung và Nguyễn Ngọc Tài chỉ xem điểm bán thuộc Sup của mình (theo cột "Sup" trong sheet Danh mục). Tắt: các Sup xem được tất cả.</div>
+    </div>
 
     <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
@@ -476,9 +486,18 @@ var addModalSourceId = null;
 var editingId = null;
 var editingKind = null;
 
-var adminEmails = ['itviettel098@gmail.com', 'itviettel094@gmail.com', 'nguyenngoctaiaice@gmail.com'];   // server sẽ ghi đè bằng danh sách thật
+// CHỈ 1 ADMIN DUY NHẤT (server sẽ ghi đè bằng danh sách thật)
+var adminEmails = ['itviettel098@gmail.com'];
 var storesList = [];
 var productsList = [];
+
+/* ===== PHÂN QUYỀN (server trả về, admin bật/tắt trong ⚙️) ===== */
+var myRole = '';               // 'admin' | 'sup' | 'staff' ('' = chưa biết / demo)
+var mySupName = '';            // tên Sup của người đăng nhập (nếu là Sup)
+var viewOwnOnly = false;       // true: nhân viên chỉ xem dữ liệu do mình nhập
+var supOwnOnly = false;        // true: Sup chỉ xem điểm bán của Sup đó
+var _scopeInit = false;
+var _supForcedApplied = false;
 
 function hasServer() { return !!GAS_RUN; }
 
@@ -504,6 +523,26 @@ function showMsg(elId, text, type) {
   var el = document.getElementById(elId);
   el.innerHTML = '<div class="msg ' + type + '">' + escHtml(text) + '</div>';
   setTimeout(function(){ el.innerHTML = ''; }, 4000);
+}
+
+/* ===== NHÃN QUYỀN Ở GÓC TRÊN + ẨN NÚT ⚙️ VỚI NGƯỜI KHÔNG PHẢI ADMIN ===== */
+function updateRoleUi() {
+  var st = document.getElementById('adminStatus');
+  var txt;
+  if (isAdmin) txt = 'Chế độ: Admin ✅';
+  else if (myRole === 'admin') txt = 'Admin (bấm ⚙️ để mở khoá)';
+  else if (myRole === 'sup') txt = 'Sup' + (mySupName ? ': ' + mySupName : '');
+  else txt = 'Chế độ: Nhân viên';
+  st.textContent = txt;
+  // Chỉ tài khoản admin mới thấy nút ⚙️ (chưa biết vai trò thì vẫn hiện)
+  document.getElementById('gearBtn').style.display = (myRole && myRole !== 'admin') ? 'none' : '';
+
+  // Dòng ghi chú phạm vi dữ liệu đang được xem
+  var info = document.getElementById('scopeInfo');
+  var note = '';
+  if (myRole === 'sup' && supOwnOnly) note = '👁️ Bạn chỉ xem được điểm bán / PG thuộc Sup ' + (mySupName || 'của bạn') + '.';
+  else if (myRole === 'staff' && viewOwnOnly) note = '👁️ Bạn chỉ xem được dữ liệu do chính bạn nhập.';
+  info.textContent = note;
 }
 
 /* ===== LOAD DỮ LIỆU BAN ĐẦU (chỉ 1 lần gọi server) ===== */
@@ -543,10 +582,13 @@ function loadInit() {
       storesList = (d.formData && d.formData.stores) || [];
       productsList = (d.formData && d.formData.products) || [];
       showUser(d.user);
+      if (d.role) myRole = d.role;
+      mySupName = d.supName || '';
       if (d.adminEmails && d.adminEmails.length) adminEmails = d.adminEmails;
       salesUsedMap = d.salesUsed || {}; salesUsedDate = today;
       setStockBundle(d.stock, today);
       stockStatusLoaded = true;
+      updateRoleUi();
       afterListsLoaded();
     })
     .withFailureHandler(function(err) {
@@ -556,7 +598,7 @@ function loadInit() {
 }
 
 /* ===== KHOÁ THEO EMAIL: đã nhập Tồn đầu thì ẩn nút "1. TỒN ĐẦU/CUỐI" cho đến khi đủ 2 tiếng ===== */
-function isMyLocked() { return !isAdmin && myLockUntil > 0 && stockNow() < myLockUntil; }
+function isMyLocked() { return !isAdmin && myRole !== 'admin' && myLockUntil > 0 && stockNow() < myLockUntil; }
 function applyNavLock() {
   var locked = isMyLocked();
   document.getElementById('navStock').style.display = locked ? 'none' : '';
@@ -579,7 +621,7 @@ function afterListsLoaded() {
 }
 
 /* ===== SUP ↔ ĐIỂM BÁN (lấy từ cột F "Sup", G "Khu vực" của sheet Danh mục) ===== */
-function normSup(s) { return String(s || '').trim().toLowerCase(); }
+function normSup(s) { return String(s || '').trim().toLowerCase().replace(/^sup\s+/, ''); }
 function lsGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 function allSups() {
@@ -589,6 +631,13 @@ function allSups() {
     if (s && !seen[normSup(s)]) { seen[normSup(s)] = 1; out.push(s); }
   });
   return out.sort();
+}
+// Sup bị khoá cứng theo tài khoản (khi admin bật "Sup chỉ xem của mình"): trả về tên Sup khớp trong danh sách, hoặc ''
+function forcedSup(sups) {
+  if (isAdmin || myRole !== 'sup' || !supOwnOnly || !mySupName) return '';
+  var hit = '';
+  (sups || allSups()).forEach(function(s) { if (!hit && normSup(s) === normSup(mySupName)) hit = s; });
+  return hit;
 }
 // strict = true: chỉ điểm bán thuộc đúng Sup (dùng cho báo cáo). strict = false: thêm cả điểm bán chưa gán Sup (dùng cho form nhập)
 function storesOfSup(sup, strict) {
@@ -609,13 +658,22 @@ function renderSupSelects() {
   if (rRow) rRow.style.display = sups.length ? '' : 'none';
   var k = document.getElementById('k_sup'), r = document.getElementById('r_sup');
   if (!k || !r) return;
+  var forced = forcedSup(sups);
   var kv = k.value || lsGet('kSup'), rv = r.value || lsGet('rSup');
   var opts = sups.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
   k.innerHTML = '<option value="">-- Chọn Sup --</option>' + opts;
   r.innerHTML = '<option value="">Tất cả Sup</option>' + opts;
-  k.value = sups.indexOf(kv) !== -1 ? kv : '';
-  r.value = sups.indexOf(rv) !== -1 ? rv : '';
+  if (forced) {
+    k.value = forced; r.value = forced;
+    k.disabled = true; r.disabled = true;
+  } else {
+    k.disabled = false; r.disabled = false;
+    k.value = sups.indexOf(kv) !== -1 ? kv : '';
+    r.value = sups.indexOf(rv) !== -1 ? rv : '';
+  }
   renderStockSupStores();
+  if (forced && !_supForcedApplied) { _supForcedApplied = true; onReportSupChange(); }
+  if (!forced) _supForcedApplied = false;
 }
 function loadStoreInfo(cb) {
   if (!hasServer()) { if (cb) cb(); return; }
@@ -761,7 +819,7 @@ function confirmAddModal() {
 /* ===== ẨN / HIỆN NÚT "KPI BÁN HÀNG" (admin bật tắt, lưu trên server) ===== */
 var salesEnabled = true;
 function applySalesNav() {
-  var show = salesEnabled || isAdmin;
+  var show = salesEnabled || isAdmin || myRole === 'admin';
   document.getElementById('navSales').style.display = show ? '' : 'none';
   if (!show && document.getElementById('view-sales').style.display !== 'none') {
     switchView(isMyLocked() ? 'history' : 'stock');
@@ -781,6 +839,32 @@ function adminSaveSalesVisible() {
     })
     .withFailureHandler(function(err) { document.getElementById('a_salesVisible').checked = salesEnabled; adminFail(err); })
     .adminSetSalesEnabled(on, adminToken);
+}
+
+/* ===== PHÂN QUYỀN XEM DỮ LIỆU (admin bật / tắt) ===== */
+function adminSaveViewScope() {
+  var vo = document.getElementById('a_viewOwn').checked;
+  var so = document.getElementById('a_supOwn').checked;
+  var restore = function() {
+    document.getElementById('a_viewOwn').checked = viewOwnOnly;
+    document.getElementById('a_supOwn').checked = supOwnOnly;
+  };
+  var apply = function(v, s) {
+    viewOwnOnly = !!v; supOwnOnly = !!s;
+    updateRoleUi();
+    var parts = [];
+    parts.push(viewOwnOnly ? 'Nhân viên: chỉ xem dữ liệu của mình' : 'Nhân viên: xem được của nhau');
+    parts.push(supOwnOnly ? 'Sup: chỉ xem điểm bán của mình' : 'Sup: xem tất cả');
+    showToast('Đã lưu. ' + parts.join(' | '), 'success');
+  };
+  if (!hasServer()) { apply(vo, so); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.viewOwnOnly, res.supOwnOnly);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetViewScope(vo, so, adminToken);
 }
 
 /* ===== ĐIỀU HƯỚNG ===== */
@@ -971,7 +1055,8 @@ function inWindow(cfg) {   // theo giờ Việt Nam (GMT+7), dùng giờ server
   var n = d.getUTCHours() * 60 + d.getUTCMinutes();
   return f <= t ? (n >= f && n <= t) : (n >= f || n <= t);
 }
-function windowOk(mode) { return isAdmin || inWindow(stockSchedule[mode]); }
+function isAdminLike() { return isAdmin || myRole === 'admin'; }
+function windowOk(mode) { return isAdminLike() || inWindow(stockSchedule[mode]); }
 function updateSchedText() {
   var el = document.getElementById('k_schedInfo');
   if (!el) return;
@@ -1002,11 +1087,11 @@ function stockEligible(p, mode) { return windowOk(mode) && stockEligibleRaw(p, m
 function stockEligibleRaw(p, mode) {
   var started = stockStatus.started.indexOf(p) !== -1;
   var full = stockStatus.full.indexOf(p) !== -1;
-  if (mode === 'open') return isAdmin ? !started : (stockStatus.started.length === 0 && !started);   // nhân viên: cửa hàng đã nhập Tồn đầu hôm nay thì khoá; admin không bị khoá
-  return started && !full && (isAdmin || stockNow() >= unlockAt(p));
+  if (mode === 'open') return isAdminLike() ? !started : (stockStatus.started.length === 0 && !started);   // nhân viên: cửa hàng đã nhập Tồn đầu hôm nay thì khoá; admin không bị khoá
+  return started && !full && (isAdminLike() || stockNow() >= unlockAt(p));
 }
 function stockWaiting() {   // sản phẩm đã có Tồn đầu, chưa đủ thời gian chờ
-  if (isAdmin) return [];
+  if (isAdminLike()) return [];
   return productsList.filter(function(p){
     return stockStatus.started.indexOf(p) !== -1 && stockStatus.full.indexOf(p) === -1 && stockNow() < unlockAt(p);
   });
@@ -1068,8 +1153,26 @@ function setStockBundle(b, date) {
   stockOverviewDate = date;
   if (b.delayMs !== undefined && b.delayMs !== null) { CLOSE_DELAY_MS = b.delayMs; updateDelayTexts(); }
   if (b.schedule) { stockSchedule = b.schedule; updateSchedText(); }
-  if (b.salesEnabled !== undefined) { salesEnabled = !!b.salesEnabled; applySalesNav(); }
+  if (b.role) myRole = b.role;
+  if (b.supName !== undefined) mySupName = b.supName || '';
+  if (b.salesEnabled !== undefined) { salesEnabled = !!b.salesEnabled; }
+  applySalesNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
+
+  // Phạm vi xem dữ liệu do admin bật/tắt: đổi thì tải lại dữ liệu đang hiển thị
+  if (b.viewOwnOnly !== undefined || b.supOwnOnly !== undefined) {
+    var nv = !!b.viewOwnOnly, ns = !!b.supOwnOnly;
+    var changed = _scopeInit && (nv !== viewOwnOnly || ns !== supOwnOnly);
+    viewOwnOnly = nv; supOwnOnly = ns;
+    _scopeInit = true;
+    if (changed) {
+      _metaKey = ''; _supForcedApplied = false;
+      loadStoreInfo();
+      if (document.getElementById('view-history').style.display !== 'none') loadHistory();
+      if (document.getElementById('view-report').style.display !== 'none') loadReport();
+    }
+  }
+  updateRoleUi();
   myLockUntil = b.until || 0;
   applyNavLock();
 }
@@ -1762,8 +1865,8 @@ var otpCooldownTimer = null;
 function setAdmin(on, token) {
   isAdmin = !!on;
   adminToken = on ? token : '';
-  document.getElementById('adminStatus').textContent = isAdmin ? 'Chế độ: Admin ✅' : 'Chế độ: Nhân viên';
   document.getElementById('gearBtn').classList.toggle('on', isAdmin);
+  updateRoleUi();
   stockOverviewDate = '';
   salesUsedDate = '';
   applySalesNav();
@@ -1857,6 +1960,8 @@ function verifyOtp() {
 function openAdminPanel() {
   document.getElementById('a_delay').value = Math.round(CLOSE_DELAY_MS / 60000);
   document.getElementById('a_salesVisible').checked = salesEnabled;
+  document.getElementById('a_viewOwn').checked = viewOwnOnly;
+  document.getElementById('a_supOwn').checked = supOwnOnly;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
