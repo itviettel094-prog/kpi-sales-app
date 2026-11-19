@@ -1642,7 +1642,7 @@ function buildReport() {
   var shTo = document.getElementById('r_shiftTo').value;
   if (shFrom && shTo) out.push('Ca làm việc: ' + shFrom + ' - ' + shTo);
   out.push('Họ Tên Sup: ' + document.getElementById('r_name').value.trim() + '.');
-  out.push('Số điểm PG check: ' + shown.length + '/' + total);
+  out.push('Số điểm PG check: ' + stores.length + '/' + total);
 
   // Điểm bán chưa có dữ liệu của loại báo cáo đang chọn
   var missingAll = (reportStore === '__all__') ? supStores.filter(function(st){ return stores.indexOf(st) === -1; }) : [];
