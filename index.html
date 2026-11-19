@@ -201,6 +201,9 @@
         </div>
         <div class="hint">Mỗi ngày nhập <b>Tồn đầu</b> một lần. Sau khi nhập xong, Tồn đầu sẽ ẩn đi và <b>Tồn cuối</b> chỉ mở sau <b id="delayText">2 tiếng</b>.</div>
         <div class="hint" id="k_schedInfo" style="color:#8a6d00;font-weight:700"></div>
+        <div class="row row-1" id="k_supRow" style="display:none">
+          <div class="input-group"><label class="input-label">Sup phụ trách</label><select id="k_sup" onchange="onStockSupChange()"></select></div>
+        </div>
         <div class="row row-ds">
           <div class="input-group"><label class="input-label">Ngày</label><input type="date" id="k_date" onchange="onStockHeaderChange()"></div>
           <div class="input-group"><label class="input-label">Cửa Hàng</label><select id="k_store" onchange="handleSelectChange('store', this); onStockHeaderChange();"></select></div>
@@ -248,6 +251,9 @@
         </div>
         <div class="row row-1">
           <div class="input-group"><label class="input-label">Điểm bán</label><select id="r_store" onchange="onReportStoreChange()"><option value="__all__">Tất cả điểm bán</option></select></div>
+        </div>
+        <div class="row row-1" id="r_supRow" style="display:none">
+          <div class="input-group"><label class="input-label">Sup phụ trách</label><select id="r_sup" onchange="onReportSupChange()"><option value="">Tất cả Sup</option></select></div>
         </div>
         <div class="row row-2">
           <div class="input-group"><label class="input-label">Họ tên</label><input type="text" id="r_name" oninput="onReportMetaChange()"></div>
@@ -566,6 +572,82 @@ function afterListsLoaded() {
   renderProductSelects();
   syncStockStatus();
   refreshStockMode();
+  loadStoreInfo();
+}
+
+/* ===== SUP ↔ ĐIỂM BÁN (lấy từ cột F "Sup", G "Khu vực" của sheet Danh mục) ===== */
+function normSup(s) { return String(s || '').trim().toLowerCase(); }
+function lsGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function allSups() {
+  var seen = {}, out = [];
+  Object.keys(storeInfo).forEach(function(st) {
+    var s = String((storeInfo[st] || {}).sup || '').trim();
+    if (s && !seen[normSup(s)]) { seen[normSup(s)] = 1; out.push(s); }
+  });
+  return out.sort();
+}
+// strict = true: chỉ điểm bán thuộc đúng Sup (dùng cho báo cáo). strict = false: thêm cả điểm bán chưa gán Sup (dùng cho form nhập)
+function storesOfSup(sup, strict) {
+  if (!sup) return storesList.slice();
+  return storesList.filter(function(st) {
+    var s = normSup((storeInfo[st] || {}).sup);
+    return s === normSup(sup) || (!strict && !s);
+  });
+}
+function storesForEntry() {
+  var k = document.getElementById('k_sup');
+  return storesOfSup(k ? k.value : '', false);
+}
+function renderSupSelects() {
+  var sups = allSups();
+  var kRow = document.getElementById('k_supRow'), rRow = document.getElementById('r_supRow');
+  if (kRow) kRow.style.display = sups.length ? '' : 'none';
+  if (rRow) rRow.style.display = sups.length ? '' : 'none';
+  var k = document.getElementById('k_sup'), r = document.getElementById('r_sup');
+  if (!k || !r) return;
+  var kv = k.value || lsGet('kSup'), rv = r.value || lsGet('rSup');
+  var opts = sups.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
+  k.innerHTML = '<option value="">-- Chọn Sup --</option>' + opts;
+  r.innerHTML = '<option value="">Tất cả Sup</option>' + opts;
+  k.value = sups.indexOf(kv) !== -1 ? kv : '';
+  r.value = sups.indexOf(rv) !== -1 ? rv : '';
+}
+function loadStoreInfo(cb) {
+  if (!hasServer()) { if (cb) cb(); return; }
+  GAS_RUN
+    .withSuccessHandler(function(m) {
+      storeInfo = m || {}; _metaKey = '';
+      renderSupSelects();
+      renderStoreSelects();
+      if (cb) cb();
+    })
+    .withFailureHandler(function() { if (cb) cb(); })
+    .getStoreInfo();
+}
+function onStockSupChange() {
+  lsSet('kSup', document.getElementById('k_sup').value);
+  var storeEl = document.getElementById('k_store');
+  var cur = storeEl.value;
+  renderStoreSelects();   // chỉ hiện điểm bán của Sup đã chọn
+  if (storeEl.value !== cur) storeEl.value = '';
+  onStockHeaderChange();
+}
+function onReportSupChange() {
+  var sup = document.getElementById('r_sup').value;
+  lsSet('rSup', sup);
+  if (sup) {
+    document.getElementById('r_name').value = sup;   // tự điền Họ tên Sup
+    var area = '';
+    Object.keys(storeInfo).some(function(st) {
+      var x = storeInfo[st] || {};
+      if (normSup(x.sup) === normSup(sup) && x.area) { area = x.area; return true; }
+      return false;
+    });
+    if (area) document.getElementById('r_area').value = area;   // tự điền Khu vực nếu sheet có
+  }
+  reportStore = '__all__'; _rsKey = ''; _metaKey = ''; _offKey = '';
+  onReportMetaChange();
 }
 
 function buildOptionsHtml(list, addLabel, placeholder) {
@@ -581,8 +663,9 @@ function renderStoreSelects(forId, value) {
   ['s_store','k_store'].forEach(function(id){
     var sel = document.getElementById(id);
     var val = (forId === id) ? value : sel.value;
-    sel.innerHTML = buildOptionsHtml(storesList, 'Thêm mới cửa hàng...', '-- Chọn cửa hàng --');
-    if (val && storesList.indexOf(val) !== -1) sel.value = val;
+    var list = (id === 'k_store') ? storesForEntry() : storesList;
+    sel.innerHTML = buildOptionsHtml(list, 'Thêm mới cửa hàng...', '-- Chọn cửa hàng --');
+    if (val && list.indexOf(val) !== -1) sel.value = val;
     else sel.value = '';
   });
 }
@@ -1373,7 +1456,7 @@ function loadReport() {
   }
   ta.value = '⏳ Đang tải dữ liệu...';
   GAS_RUN
-    .withSuccessHandler(function(m) { storeInfo = m || {}; _metaKey = ''; buildReport(); })
+    .withSuccessHandler(function(m) { storeInfo = m || {}; _metaKey = ''; renderSupSelects(); buildReport(); })
     .withFailureHandler(function() {})
     .getStoreInfo();
   GAS_RUN
@@ -1404,13 +1487,15 @@ function onPgChoice(el) {
   buildReport();
 }
 var _metaKey = '';
-function renderReportMeta(stores) {
+function renderReportMeta(stores, fullOrder) {
   var box = document.getElementById('r_meta');
   if (!box) return;
-  var key = stores.join('|');
+  fullOrder = fullOrder || stores;
+  var key = stores.map(function(st) { return st + '#' + fullOrder.indexOf(st); }).join('|');
   if (key === _metaKey) return;
   _metaKey = key;
-  box.innerHTML = stores.map(function(st, i) {
+  box.innerHTML = stores.map(function(st) {
+    var i = fullOrder.indexOf(st);
     var x = storeInfo[st] || { addr: '', pgs: [] };
     var cur = pgChoice(st), pgHtml;
     if (x.pgs.length > 1) {
@@ -1486,9 +1571,15 @@ function buildReport() {
     if (!map[st]) { map[st] = []; stores.push(st); }
     map[st].push(r);
   });
+  // Lọc theo Sup đang chọn: chỉ giữ các điểm bán thuộc Sup đó
+  var supSel = document.getElementById('r_sup').value;
+  var supStores = storesOfSup(supSel, true);
+  if (supSel) stores = stores.filter(function(st){ return supStores.indexOf(st) !== -1; });
   updateReportStoreSelect(stores);
   var shown = reportStore === '__all__' ? stores : stores.filter(function(st){ return st === reportStore; });
-  renderReportMeta(shown);
+  // Thứ tự cố định của các điểm bán (không đổi khi lọc theo 1 điểm bán)
+  var fullOrder = stores.concat(supStores.filter(function(st){ return stores.indexOf(st) === -1; }));
+  renderReportMeta(shown, fullOrder);
 
   // Các điểm bán đã có Tồn đầu trong ngày (dùng cho báo cáo cuối ca)
   var openedMap = {};
@@ -1496,7 +1587,7 @@ function buildReport() {
     if (r.date === date && hasVal(r.tonDau)) openedMap[String(r.store).trim()] = true;
   });
 
-  var total = Math.max(storesList.length, stores.length);
+  var total = Math.max(supStores.length, stores.length);
   var SEP = '      ____________________';   // đường kẻ ngang, muốn đổi kiểu thì sửa ở đây
 
   var out = [];
@@ -1510,7 +1601,7 @@ function buildReport() {
   out.push('Số điểm PG check: ' + shown.length + '/' + total);
 
   // Điểm bán chưa có dữ liệu của loại báo cáo đang chọn
-  var missingAll = (reportStore === '__all__') ? storesList.filter(function(st){ return stores.indexOf(st) === -1; }) : [];
+  var missingAll = (reportStore === '__all__') ? supStores.filter(function(st){ return stores.indexOf(st) === -1; }) : [];
   // Báo cáo cuối ca: điểm nào không có Tồn đầu => mặc định OFF (không cần tick)
   var missing = missingAll.filter(function(st){ return !(isClose && !openedMap[st]); });
   renderReportOff(missing, date);
@@ -1518,10 +1609,10 @@ function buildReport() {
 
   // Mỗi điểm bán là 1 khối (mảng các dòng)
   var blocks = [];
-  shown.forEach(function(st, i) {
+  shown.forEach(function(st) {
     var x = storeInfo[st] || {};
     var b = [];
-    b.push('Điểm bán ' + (i + 1) + ': ' + st);
+    b.push('Điểm bán ' + (fullOrder.indexOf(st) + 1) + ': ' + st);
     b.push('Địa Chỉ: ' + (x.addr || ''));
     b.push('Họ Tên PG: ' + pgChoice(st));
     b.push('');
@@ -1547,7 +1638,7 @@ function buildReport() {
   missingAll.forEach(function(st, k) {
     var autoOff = isClose && !openedMap[st];
     var isOff = autoOff || !!offMap[date + '|' + st];
-    blocks.push(['Điểm bán ' + (shown.length + k + 1) + ': ' + st + ' - ' + (isOff ? 'OFF' : 'CHƯA NHẬP')]);
+    blocks.push(['Điểm bán ' + (fullOrder.indexOf(st) + 1) + ': ' + st + ' - ' + (isOff ? 'OFF' : 'CHƯA NHẬP')]);
   });
 
   if (!blocks.length) {
