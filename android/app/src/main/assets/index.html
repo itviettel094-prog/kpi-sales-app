@@ -82,6 +82,8 @@
     .subtabs button.active { background:#28a745; color:#fff; }
 
     .table-wrap { overflow-x:auto; background:#fff; border-radius:10px; }
+    .table-wrap.cart { overflow:visible; }
+    .input-label { user-select:none; }
     table { width:100%; border-collapse:collapse; font-size:.74rem; }
     th { background:#e8f5e9; color:#1e7e34; font-weight:800; text-transform:uppercase; font-size:.6rem; padding:7px 4px; border:1px solid #28a745; white-space:nowrap; }
     td { padding:6px 4px; border:1px solid #28a745; text-align:center; color:#333; background:#fff; word-break:break-word; }
@@ -180,7 +182,7 @@
         </div>
         <button class="btn-secondary btn-add-line" onclick="addSalesLine()">➕ Thêm dòng</button>
 
-        <div class="table-wrap" style="margin-bottom:6px">
+        <div class="table-wrap cart" style="margin-bottom:6px">
           <table>
             <thead><tr><th>#</th><th>Sản phẩm</th><th>SL</th><th></th></tr></thead>
             <tbody id="s_cartBody"></tbody>
@@ -217,9 +219,9 @@
           </div>
           <button class="btn-secondary btn-add-line" id="k_addBtn" onclick="addStockLine()">➕ Thêm dòng</button>
 
-          <div class="table-wrap" style="margin-bottom:6px">
-            <table>
-              <thead><tr><th>#</th><th>Sản phẩm</th><th>Loại</th><th>SL</th><th></th></tr></thead>
+          <div class="table-wrap cart" style="margin-bottom:6px">
+          <table>
+            <thead><tr><th>#</th><th>Sản phẩm</th><th>Loại</th><th>SL</th><th></th></tr></thead>
               <tbody id="k_cartBody"></tbody>
             </table>
           </div>
@@ -797,10 +799,17 @@ function availableSalesProducts() {
 function renderSalesProductSelect(forceValue) {
   var sel = document.getElementById('s_product');
   var val = forceValue !== undefined ? forceValue : sel.value;
-  var list = availableSalesProducts();
-  sel.innerHTML = buildOptionsHtml(list, 'Thêm mới sản phẩm...');
-  if (val && list.indexOf(val) !== -1) sel.value = val;
-  else if (list.length) sel.value = list[0];
+  var avail = availableSalesProducts();
+  var html = productsList.map(function(p) {
+    var ok = avail.indexOf(p) !== -1, why = '';
+    if (!ok) why = salesCart.some(function(c){ return c.product === p; }) ? ' (đã thêm)' : ' (đã nhập hôm nay)';
+    return '<option value="' + escHtml(p) + '"' + (ok ? '' : ' disabled') + '>' + escHtml(p + why) + '</option>';
+  }).join('');
+  html += '<option value="__add_new__">+ Thêm mới sản phẩm...</option>';
+  sel.innerHTML = html;
+  if (val && avail.indexOf(val) !== -1) sel.value = val;
+  else if (avail.length) sel.value = avail[0];
+  else sel.selectedIndex = -1;
 }
 function renderSalesCart() {
   var body = document.getElementById('s_cartBody');
@@ -995,10 +1004,22 @@ function availableStockProducts() {
 function renderStockProductSelect(forceValue) {
   var sel = document.getElementById('k_product');
   var val = forceValue !== undefined ? forceValue : sel.value;
-  var list = availableStockProducts();
-  sel.innerHTML = buildOptionsHtml(list, 'Thêm mới sản phẩm...');
-  if (val && list.indexOf(val) !== -1) sel.value = val;
-  else if (list.length) sel.value = list[0];
+  var avail = availableStockProducts();
+  var html = productsList.map(function(p) {
+    var ok = avail.indexOf(p) !== -1, why = '';
+    if (!ok) {
+      if (stockCart.some(function(c){ return c.product === p; })) why = ' (đã thêm vào danh sách)';
+      else if (stockStatus.full.indexOf(p) !== -1) why = ' (đã đủ đầu & cuối)';
+      else if (stockStatus.started.indexOf(p) !== -1) why = (stockMode === 'open') ? ' (đã nhập tồn đầu)' : ' (chưa đến giờ)';
+      else why = (stockMode === 'open') ? ' (cửa hàng đã nhập tồn đầu / ngoài giờ)' : ' (chưa có tồn đầu)';
+    }
+    return '<option value="' + escHtml(p) + '"' + (ok ? '' : ' disabled') + '>' + escHtml(p + why) + '</option>';
+  }).join('');
+  html += '<option value="__add_new__">+ Thêm mới sản phẩm...</option>';
+  sel.innerHTML = html;
+  if (val && avail.indexOf(val) !== -1) sel.value = val;
+  else if (avail.length) sel.value = avail[0];
+  else sel.selectedIndex = -1;
 }
 function renderStockCart() {
   var body = document.getElementById('k_cartBody');
