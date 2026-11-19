@@ -210,7 +210,8 @@
           <div class="input-group"><label class="input-label">Ngày</label><input type="date" id="k_date" onchange="onStockHeaderChange()"></div>
           <div class="input-group"><label class="input-label">Cửa Hàng</label><select id="k_store" onchange="handleSelectChange('store', this); onStockHeaderChange();"></select></div>
         </div>
-        <div id="k_modeBanner"></div>
+        <div id="k_supStores"></div>
+<div id="k_modeBanner"></div>
 
         <div id="k_formArea">
           <div class="row row-2">
@@ -220,8 +221,8 @@
           <button class="btn-secondary btn-add-line" id="k_addBtn" onclick="addStockLine()">➕ Thêm dòng</button>
 
           <div class="table-wrap cart" style="margin-bottom:6px">
-          <table>
-            <thead><tr><th>#</th><th>Sản phẩm</th><th>Loại</th><th>SL</th><th></th></tr></thead>
+            <table>
+              <thead><tr><th>#</th><th>Sản phẩm</th><th>Loại</th><th>SL</th><th></th></tr></thead>
               <tbody id="k_cartBody"></tbody>
             </table>
           </div>
@@ -614,6 +615,7 @@ function renderSupSelects() {
   r.innerHTML = '<option value="">Tất cả Sup</option>' + opts;
   k.value = sups.indexOf(kv) !== -1 ? kv : '';
   r.value = sups.indexOf(rv) !== -1 ? rv : '';
+  renderStockSupStores();
 }
 function loadStoreInfo(cb) {
   if (!hasServer()) { if (cb) cb(); return; }
@@ -627,7 +629,20 @@ function loadStoreInfo(cb) {
     .withFailureHandler(function() { if (cb) cb(); })
     .getStoreInfo();
 }
+function renderStockSupStores() {
+  var box = document.getElementById('k_supStores');
+  if (!box) return;
+  var sup = document.getElementById('k_sup').value;
+  if (!sup) { box.innerHTML = ''; return; }
+  var list = storesOfSup(sup, true);
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="hint" style="text-align:left;background:#e8f5e9;border:1px dashed #28a745;border-radius:10px;padding:8px 10px">'
+    + '<b>' + escHtml(sup) + '</b> phụ trách:<br>'
+    + list.map(function(st, i) { return (i + 1) + '. ' + escHtml(st); }).join('<br>')
+    + '</div>';
+}
 function onStockSupChange() {
+  renderStockSupStores();
   lsSet('kSup', document.getElementById('k_sup').value);
   var storeEl = document.getElementById('k_store');
   var cur = storeEl.value;
@@ -639,7 +654,7 @@ function onReportSupChange() {
   var sup = document.getElementById('r_sup').value;
   lsSet('rSup', sup);
   if (sup) {
-    document.getElementById('r_name').value = sup;   // tự điền Họ tên Sup
+    document.getElementById('r_name').value = /^sup\b/i.test(sup) ? sup : 'Sup ' + sup;
     var area = '';
     Object.keys(storeInfo).some(function(st) {
       var x = storeInfo[st] || {};
@@ -1428,7 +1443,7 @@ function toggleGroup(i) {
 /* ===== BÁO CÁO CHECKIN (để copy gửi nhóm) ===== */
 var reportMode = 'open';        // open = Tồn đầu | close = Tồn cuối
 var _reportStock = [];
-var REPORT_DEFAULT = { name: 'Sup Đặng Minh Ngọc', area: 'Hà Nội 2 - Chương Mỹ', shiftFrom: '15:00', shiftTo: '19:00' };
+var REPORT_DEFAULT = { name: 'Sup Đặng Minh Ngọc', area: 'Hà Nội 2 - Chương Mỹ', shiftFrom: '15:00', shiftTo: '20:00' };
 
 function initReport() {
   var meta = {};
@@ -1449,12 +1464,13 @@ function onReportMetaChange() {
       shiftTo: document.getElementById('r_shiftTo').value
     }));
   } catch (e) {}
+  _metaKey = '';
   buildReport();
 }
 // Ô chọn giờ làm việc chỉ hiện ở báo cáo Tồn đầu
 function applyShiftVisibility() {
   var row = document.getElementById('r_shiftRow');
-  if (row) row.style.display = (reportMode === 'open') ? '' : 'none';
+  if (row) row.style.display = '';
 }
 function setReportMode(m) {
   reportMode = m;
@@ -1507,6 +1523,24 @@ function onPgChoice(el) {
   try { localStorage.setItem('pgChoice', JSON.stringify(m)); } catch (e) {}
   buildReport();
 }
+function shiftGet(st) {
+  var m = {};
+  try { m = JSON.parse(localStorage.getItem('shiftChoice') || '{}'); } catch (e) {}
+  var s = m[st] || {};
+  return {
+    from: (s.from !== undefined) ? s.from : document.getElementById('r_shiftFrom').value,
+    to:   (s.to   !== undefined) ? s.to   : document.getElementById('r_shiftTo').value
+  };
+}
+function onShiftChange(el) {
+  var m = {};
+  try { m = JSON.parse(localStorage.getItem('shiftChoice') || '{}'); } catch (e) {}
+  var st = el.getAttribute('data-st');
+  m[st] = m[st] || {};
+  m[st][el.getAttribute('data-f')] = el.value;
+  try { localStorage.setItem('shiftChoice', JSON.stringify(m)); } catch (e) {}
+  buildReport();
+}
 var _metaKey = '';
 function renderReportMeta(stores, fullOrder) {
   var box = document.getElementById('r_meta');
@@ -1528,7 +1562,11 @@ function renderReportMeta(stores, fullOrder) {
     }
     return '<div class="sch-box"><div class="grp-sec" style="margin-top:0">Điểm bán ' + (i + 1) + ': ' + escHtml(st) + '</div>'
       + '<div class="hint" style="text-align:left;margin-bottom:6px">📍 ' + escHtml(x.addr || '(chưa có địa chỉ trong Sheet)') + '</div>'
-      + '<div class="input-group"><label class="input-label">Họ tên PG' + (x.pgs.length > 1 ? ' (chọn)' : '') + '</label>' + pgHtml + '</div></div>';
+      + '<div class="input-group"><label class="input-label">Họ tên PG' + (x.pgs.length > 1 ? ' (chọn)' : '') + '</label>' + pgHtml + '</div>'
+      + '<div class="row row-ds" style="margin:8px 0 0">'
+      +   '<div class="input-group"><label class="input-label">Ca từ</label><input type="time" data-st="' + escHtml(st) + '" data-f="from" value="' + escHtml(shiftGet(st).from) + '" onchange="onShiftChange(this)"></div>'
+      +   '<div class="input-group"><label class="input-label">Đến</label><input type="time" data-st="' + escHtml(st) + '" data-f="to" value="' + escHtml(shiftGet(st).to) + '" onchange="onShiftChange(this)"></div>'
+      + '</div></div>';
   }).join('');
 }
 
@@ -1599,7 +1637,7 @@ function buildReport() {
   updateReportStoreSelect(stores);
   var shown = reportStore === '__all__' ? stores : stores.filter(function(st){ return st === reportStore; });
   // Thứ tự cố định của các điểm bán (không đổi khi lọc theo 1 điểm bán)
-  var fullOrder = stores.concat(supStores.filter(function(st){ return stores.indexOf(st) === -1; }));
+  var fullOrder = supStores.concat(stores.filter(function(st){ return supStores.indexOf(st) === -1; }));
   renderReportMeta(shown, fullOrder);
 
   // Các điểm bán đã có Tồn đầu trong ngày (dùng cho báo cáo cuối ca)
@@ -1609,17 +1647,17 @@ function buildReport() {
   });
 
   var total = Math.max(supStores.length, stores.length);
-  var SEP = '      ____________________';   // đường kẻ ngang, muốn đổi kiểu thì sửa ở đây
+  var SEP = '________________________________';   // đường kẻ ngang, muốn đổi kiểu thì sửa ở đây
 
   var out = [];
   out.push(isClose ? 'BÁO CÁO BÁN HÀNG VÀ CHECKOUT' : 'BÁO CÁO CHECKIN');
   out.push('Ngày: ' + fmtDMY(date).replace(/-/g, '/'));
-  var sFrom = document.getElementById('r_shiftFrom').value;
-  var sTo = document.getElementById('r_shiftTo').value;
-  if (!isClose && sFrom && sTo) out.push('Ca làm việc ' + sFrom + ' - ' + sTo);
+
+  var shFrom = document.getElementById('r_shiftFrom').value;
+  var shTo = document.getElementById('r_shiftTo').value;
+  if (shFrom && shTo) out.push('Ca làm việc: ' + shFrom + ' - ' + shTo);
   out.push('Họ Tên Sup: ' + document.getElementById('r_name').value.trim() + '.');
-  out.push('Khu vực: ' + document.getElementById('r_area').value.trim() + '.');
-  out.push('Số điểm PG check: ' + shown.length + '/' + total);
+  out.push('Số điểm PG check: ' + stores.length + '/' + total);
 
   // Điểm bán chưa có dữ liệu của loại báo cáo đang chọn
   var missingAll = (reportStore === '__all__') ? supStores.filter(function(st){ return stores.indexOf(st) === -1; }) : [];
@@ -1636,6 +1674,8 @@ function buildReport() {
     b.push('Điểm bán ' + (fullOrder.indexOf(st) + 1) + ': ' + st);
     b.push('Địa Chỉ: ' + (x.addr || ''));
     b.push('Họ Tên PG: ' + pgChoice(st));
+    var shf = shiftGet(st);
+    if (shf.from && shf.to) b.push('Ca làm việc: ' + shf.from + ' - ' + shf.to);
     b.push('');
     if (isClose) {
       b.push('Báo cáo số bán trong ca:');
