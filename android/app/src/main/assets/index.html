@@ -28,7 +28,7 @@
     .toast.success { background: #28a745; }
     .toast.error   { background: #dc3545; }
     .toast.info    { background: #0d6efd; }
-    .toast.hide    { animation: slideOut .4s ease forwards; }
+    .toast.warn { background:#f9a825; color:#3e2c00; } .toast.hide    { animation: slideOut .4s ease forwards; }
     @keyframes slideIn { from{opacity:0;transform:translateY(-20px);} to{opacity:1;transform:translateY(0);} }
     @keyframes slideOut { from{opacity:1;} to{opacity:0;transform:translateX(120%);} }
 
@@ -271,7 +271,7 @@
           <div class="input-group"><label class="input-label">Khu vực</label><input type="text" id="r_area" oninput="onReportMetaChange()"></div>
         </div>
         <div id="r_meta"></div>
-        <div id="r_off"></div>
+        <div id="r_warn"></div><div id="r_off"></div>
         <textarea id="r_text" rows="16" readonly></textarea>
         <button class="btn-submit" onclick="copyReport()">📋 Copy báo cáo</button>
         <button class="btn-secondary btn-add-line" style="margin-top:8px;margin-bottom:0" onclick="loadReport()">🔄 Tải lại dữ liệu</button>
@@ -516,13 +516,13 @@ function escHtml(str) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
   });
 }
-function showToast(msg, type) {
+function showToast(msg, type, ms) {
   var c = document.getElementById('toast-container');
   var t = document.createElement('div');
   t.className = 'toast ' + type;
   t.textContent = msg;
   c.appendChild(t);
-  setTimeout(function(){ t.classList.add('hide'); setTimeout(function(){ t.remove(); }, 400); }, 3500);
+  setTimeout(function(){ t.classList.add('hide'); setTimeout(function(){ t.remove(); }, 400); }, ms || 3500);
 }
 function showMsg(elId, text, type) {
   var el = document.getElementById(elId);
@@ -1393,7 +1393,7 @@ function saveStockEntry() {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       if (res.ok) {
         playSound(savedMode === 'open' ? 'pgOpen' : 'pgClose');
-        showToast('Đã lưu ' + res.count + ' dòng ' + (savedMode === 'open' ? 'TỒN ĐẦU' : 'TỒN CUỐI') + ' thành công!', 'success');
+        showToast('Đã lưu ' + res.count + ' dòng ' + (savedMode === 'open' ? 'TỒN ĐẦU' : 'TỒN CUỐI') + ' thành công!', 'success'); if (res.warnings && res.warnings.length) { showToast('⚠️ Kiểm tra lại: ' + res.warnings.map(function(w) { return w.product + ' (Tồn cuối ' + w.tonCuoi + ' > Tồn đầu ' + w.tonDau + ')'; }).join('; '), 'warn', 12000); }
         stockCart = [];
         document.getElementById('k_qty').value = '';
         renderStockCart();
@@ -1733,6 +1733,7 @@ function renderReportOff(missing, date) {
     + '</div>';
 }
 
+function slProductKey(p) { var s = String(p || '').trim().toLowerCase(); if (s.indexOf('premium') !== -1) return 'premium'; if (s.indexOf('sleek') !== -1) return 'sleek'; if (s.indexOf('trúc bạch') !== -1 || s.indexOf('truc bach') !== -1) return 'trucbach'; if (s.indexOf('bia hơi') !== -1 || s.indexOf('bia hoi') !== -1) return 'biahoi'; return null; }
 function buildReport() {
   var date = document.getElementById('r_date').value;
   var isClose = reportMode === 'close';
@@ -1785,7 +1786,7 @@ function buildReport() {
   var offMap = getOffMap();
 
   // Mỗi điểm bán là 1 khối (mảng các dòng)
-  var blocks = [];
+  var blocks = []; var repWarn = [];
   shown.forEach(function(st) {
     var x = storeInfo[st] || {};
     var b = [];
@@ -1796,13 +1797,13 @@ function buildReport() {
     if (shf.from && shf.to) b.push('Ca làm việc: ' + shf.from + ' - ' + shf.to);
     b.push('');
     if (isClose) {
-      b.push('Báo cáo số bán trong ca:');
+      b.push('Báo cáo số bán trong ca:'); var soThung = 0;
       map[st].forEach(function(r) {
         var sold = hasVal(r.tonDau) ? (Number(r.tonDau) - Number(r.tonCuoi)) : '?';
-        b.push('- ' + String(r.product).trim() + ' : ' + sold + ' thùng.');
+        if (typeof sold === 'number' && sold < 0) repWarn.push(st + ' – ' + String(r.product).trim() + ': Tồn cuối ' + r.tonCuoi + ' > Tồn đầu ' + r.tonDau); if (typeof sold === 'number' && isFinite(sold) && sold >= 0 && slProductKey(r.product)) soThung += sold; b.push('- ' + String(r.product).trim() + ' : ' + sold + ' thùng.');
       });
       b.push('');
-      b.push('Báo cáo tồn cuối ca:');
+      var qua = Math.min(soThung, 8); b.push('🎁 Quà khuyến mãi :'); b.push('- Bia Hà Nội : ' + qua + ' lon.'); b.push('- Bia Hà Nội Premium : ' + qua + ' lon.'); b.push(''); b.push('Báo cáo tồn cuối ca:');
       map[st].forEach(function(r) {
         b.push('- ' + String(r.product).trim() + ' : ' + r.tonCuoi + ' thùng.');
       });
@@ -1830,7 +1831,7 @@ function buildReport() {
     if (i < blocks.length - 1) { out.push(''); out.push(SEP); }   // kẻ ngang giữa các điểm bán, không kẻ sau điểm cuối
   });
 
-  document.getElementById('r_text').value = out.join('\n');
+  document.getElementById('r_text').value = out.join('\n'); document.getElementById('r_warn').innerHTML = repWarn.length ? '<div class="msg" style="background:#fff3cd;color:#8a6d00;border:1px dashed #f9a825;text-align:left">⚠️ Số liệu bất thường:<br>' + repWarn.map(escHtml).join('<br>') + '</div>' : '';
   renderReportAdmin();
 }
 function renderReportAdmin() {
