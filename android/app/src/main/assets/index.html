@@ -242,7 +242,7 @@
 
         <div id="k_formArea">
           <div class="row row-1" id="k_khachRow" style="display:none">
-            <div class="input-group"><label class="input-label">Khách tiếp cận</label><input type="number" id="k_khach" min="0" placeholder="Số khách"></div>
+            <div class="input-group"><label class="input-label">Khách tiếp cận <span style="color:#dc3545">*</span></label><input type="number" id="k_khach" min="0" placeholder="Số khách (bắt buộc)" oninput="this.style.borderColor=''"></div>
           </div>
           <div class="row row-2">
             <div class="input-group"><label class="input-label">Sản Phẩm</label><select id="k_product" onchange="handleSelectChange('product', this);"></select></div>
@@ -1424,6 +1424,18 @@ function saveStockEntry() {
   var store = document.getElementById('k_store').value;
 
   if (!date || !store || store === '__add_new__') { showMsg('k_msg', 'Vui lòng chọn ngày và cửa hàng.', 'error'); return; }
+  var _willClose = (stockMode === 'close') || stockCart.some(function(c){ return c.mode === 'close'; });
+  if (_willClose) {
+    var _kEl = document.getElementById('k_khach'), _kv = _kEl.value.trim();
+    if (_kv === '' || isNaN(Number(_kv)) || Number(_kv) < 0) {
+      showMsg('k_msg', 'Vui lòng nhập "Khách tiếp cận" trước khi lưu Tồn cuối.', 'error');
+      showToast('Bắt buộc nhập "Khách tiếp cận" khi lưu Tồn cuối.', 'error');
+      _kEl.style.borderColor = '#dc3545';
+      _kEl.focus();
+      return;
+    }
+    _kEl.style.borderColor = '';
+  }
 
   if (document.getElementById('k_qty').value !== '') {
     if (!addStockLine(true)) { showMsg('k_msg', 'Dòng đang nhập chưa hợp lệ.', 'error'); return; }
