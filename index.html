@@ -1011,7 +1011,7 @@ function saveSalesEntry() {
   if (!salesCart.length) { showMsg('s_msg', 'Chưa có dòng nào để lưu. Hãy thêm sản phẩm trước.', 'error'); return; }
 
   if (!hasServer()) {
-    showToast('(Demo) Đã lưu ' + salesCart.length + ' dòng bán hàng.', 'success');
+    playSound('salesOk'); showToast('(Demo) Đã lưu ' + salesCart.length + ' dòng bán hàng.', 'success');
     resetSalesForm();
     return;
   }
@@ -1029,7 +1029,7 @@ function saveSalesEntry() {
         var slTxt = (res.sanLuong && res.sanLuong.ok)
           ? ' | dòng ' + res.sanLuong.row + ' (sheet "Nhập sản lượng")'
           : (res.sanLuong && res.sanLuong.error ? ' | ⚠️ Chưa đồng bộ "Nhập sản lượng": ' + res.sanLuong.error : '');
-        showToast('Đã lưu ' + res.count + ' dòng bán hàng thành công! ' + rowsTxt + slTxt, 'success');
+        playSound('salesOk'); showToast('Đã lưu ' + res.count + ' dòng bán hàng thành công! ' + rowsTxt + slTxt, 'success');
         if (res.used) { salesUsedMap = res.used; salesUsedDate = date; }
         resetSalesForm();
       } else {
@@ -2224,7 +2224,8 @@ var SOUND_FILES = {
   pgOpen:   'sounds/pg-ton-dau.mp3',
   pgClose:  'sounds/pg-ton-cuoi.mp3',
   supOpen:  'sounds/sup-ton-dau-ca.mp3',
-  supClose: 'sounds/sup-ton-cuoi.mp3'
+  supClose: 'sounds/sup-ton-cuoi.mp3',
+  salesOk:  'sounds/ok.mp3'
 };
 var _snd = {}, _sndQueue = [], _sndBusy = false, _sndUnlocked = false;
 Object.keys(SOUND_FILES).forEach(function(k) {
