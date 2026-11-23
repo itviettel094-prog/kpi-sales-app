@@ -222,6 +222,9 @@
 <div id="k_modeBanner"></div>
 
         <div id="k_formArea">
+          <div class="row row-1" id="k_khachRow" style="display:none">
+            <div class="input-group"><label class="input-label">Khách tiếp cận</label><input type="number" id="k_khach" min="0" placeholder="Số khách"></div>
+          </div>
           <div class="row row-2">
             <div class="input-group"><label class="input-label">Sản Phẩm</label><select id="k_product" onchange="handleSelectChange('product', this);"></select></div>
             <div class="input-group"><label class="input-label" id="k_qtyLabel">Số Lượng</label><input type="number" id="k_qty" min="0" placeholder="0" onkeydown="if(event.key==='Enter'){addStockLine();}"></div>
@@ -1259,7 +1262,7 @@ function refreshStockMode() {
     bOpen.style.display = ''; bClose.style.display = 'none';
     form.style.display = '';
     banner.innerHTML = ''; addBtn.disabled = false;
-    label.textContent = stockMode === 'open' ? 'Tồn Đầu Ngày' : 'Tồn Cuối Ngày';
+    label.textContent = stockMode === 'open' ? 'Tồn Đầu Ngày' : 'Tồn Cuối Ngày'; var kr = document.getElementById('k_khachRow'); if (kr) kr.style.display = (stockMode === 'close') ? '' : 'none';
     return;
   }
   // Đang tải trạng thái
@@ -1288,7 +1291,7 @@ function refreshStockMode() {
   }
   bOpen.style.display = showOpen ? '' : 'none';
   bClose.style.display = showClose ? '' : 'none';
-  label.textContent = stockMode === 'open' ? 'Tồn Đầu Ngày' : 'Tồn Cuối Ngày';
+  label.textContent = stockMode === 'open' ? 'Tồn Đầu Ngày' : 'Tồn Cuối Ngày'; var kr = document.getElementById('k_khachRow'); if (kr) kr.style.display = (stockMode === 'close') ? '' : 'none';
 
   var waiting = stockWaiting();
   var nextUnlock = waiting.length ? Math.min.apply(null, waiting.map(unlockAt)) : 0;
@@ -1397,6 +1400,7 @@ function saveStockEntry() {
         stockCart = [];
         document.getElementById('k_qty').value = '';
         renderStockCart();
+        document.getElementById('k_khach').value = '';
         if (res.bundle) {
           setStockBundle(res.bundle, date);   // server trả luôn dữ liệu mới -> form ẩn ngay, không chờ thêm
           syncStockStatus(); stockStatusLoaded = true;
@@ -1413,7 +1417,7 @@ function saveStockEntry() {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       showMsg('k_msg', 'Lỗi: ' + err.message, 'error');
     })
-    .submitStockBatch({ date: date, store: store, adminToken: adminToken, items: stockCart.map(function(c){ return { product: c.product, qty: c.qty, mode: c.mode }; }) });
+    .submitStockBatch({ date: date, store: store, adminToken: adminToken, khachTiepCan: (savedMode === 'close' ? document.getElementById('k_khach').value : ''), items: stockCart.map(function(c){ return { product: c.product, qty: c.qty, mode: c.mode }; }) });
 }
 
 /* ===== LỊCH SỬ (gom theo Ngày + Cửa hàng) ===== */
