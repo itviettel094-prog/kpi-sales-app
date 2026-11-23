@@ -181,6 +181,9 @@
           <div class="input-group"><label class="input-label">Ngày</label><input type="date" id="s_date" onchange="onSalesHeaderChange()"></div>
           <div class="input-group"><label class="input-label">Cửa Hàng</label><select id="s_store" onchange="handleSelectChange('store', this); onSalesHeaderChange();"></select></div>
         </div>
+        <div class="row row-1">
+          <div class="input-group"><label class="input-label">Khách tiếp cận</label><input type="number" id="s_khach" min="0" placeholder="Số khách"></div>
+        </div>
         <div class="row row-2">
           <div class="input-group"><label class="input-label">Sản Phẩm</label><select id="s_product" onchange="handleSelectChange('product', this)"></select></div>
           <div class="input-group"><label class="input-label">Số Lượng Bán</label><input type="number" id="s_qty" min="0" placeholder="0" onkeydown="if(event.key==='Enter'){addSalesLine();}"></div>
@@ -990,6 +993,7 @@ function resetSalesForm() {
   lastSalesStore = '';
   document.getElementById('s_store').value = '';   // làm mới cửa hàng để nhập lại
   document.getElementById('s_qty').value = '';
+  document.getElementById('s_khach').value = '';
   renderSalesCart();
   renderSalesProductSelect('');
 }
@@ -1019,7 +1023,13 @@ function saveSalesEntry() {
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       if (res.ok) {
-        showToast('Đã lưu ' + res.count + ' dòng bán hàng thành công!', 'success');
+        var rowsTxt = (res.rowsBanHang && res.rowsBanHang.length)
+          ? 'dòng ' + res.rowsBanHang.join(', ') + ' (sheet "' + res.sheetBanHang + '")'
+          : '';
+        var slTxt = (res.sanLuong && res.sanLuong.ok)
+          ? ' | dòng ' + res.sanLuong.row + ' (sheet "Nhập sản lượng")'
+          : (res.sanLuong && res.sanLuong.error ? ' | ⚠️ Chưa đồng bộ "Nhập sản lượng": ' + res.sanLuong.error : '');
+        showToast('Đã lưu ' + res.count + ' dòng bán hàng thành công! ' + rowsTxt + slTxt, 'success');
         if (res.used) { salesUsedMap = res.used; salesUsedDate = date; }
         resetSalesForm();
       } else {
@@ -1032,7 +1042,7 @@ function saveSalesEntry() {
       btn.disabled = false; btn.textContent = '✅ Xác Nhận Lưu';
       showMsg('s_msg', 'Lỗi: ' + err.message, 'error');
     })
-    .submitSalesBatch({ date: date, store: store, adminToken: adminToken, items: salesCart });
+    .submitSalesBatch({ date: date, store: store, adminToken: adminToken, items: salesCart, khachTiepCan: document.getElementById('s_khach').value });
 }
 
 /* ===== TỒN KHO (kiểu thu ngân) ===== */
