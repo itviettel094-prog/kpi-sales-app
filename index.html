@@ -2316,7 +2316,7 @@ function unlockSounds() {
   document.addEventListener(ev, unlockSounds, { passive: true });
 });
 
-function playSound(name) { _sndQueue.push(name); runSoundQueue(); }
+function playSound(name) { var a = _snd[name]; if (!a) return; Object.keys(_snd).forEach(function(k) { try { _snd[k].pause(); _snd[k].currentTime = 0; } catch (e) {} }); try { a.muted = false; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {} }
 function runSoundQueue() {
   if (_sndBusy || !_sndQueue.length) return;
   var a = _snd[_sndQueue.shift()];
@@ -2375,7 +2375,7 @@ function processReportRows(rows) {
       if (_repKnown[k] || keys[k].own) return;     // không phát tiếng cho chính mình lưu
       if (/\|open$/.test(k)) hasOpen = true; else hasClose = true;
     });
-    if (hasOpen) playSound('supOpen');
+    if (hasOpen && !hasClose) playSound('supOpen');
     if (hasClose) playSound('supClose');
   }
   Object.keys(keys).forEach(function(k) { _repKnown[k] = 1; });
