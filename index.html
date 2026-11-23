@@ -1733,6 +1733,7 @@ function renderReportOff(missing, date) {
     + '</div>';
 }
 
+function slProductKey(p) { var s = String(p || '').trim().toLowerCase(); if (s.indexOf('premium') !== -1) return 'premium'; if (s.indexOf('sleek') !== -1) return 'sleek'; if (s.indexOf('trúc bạch') !== -1 || s.indexOf('truc bach') !== -1) return 'trucbach'; if (s.indexOf('bia hơi') !== -1 || s.indexOf('bia hoi') !== -1) return 'biahoi'; return null; }
 function buildReport() {
   var date = document.getElementById('r_date').value;
   var isClose = reportMode === 'close';
@@ -1796,13 +1797,13 @@ function buildReport() {
     if (shf.from && shf.to) b.push('Ca làm việc: ' + shf.from + ' - ' + shf.to);
     b.push('');
     if (isClose) {
-      b.push('Báo cáo số bán trong ca:');
+      b.push('Báo cáo số bán trong ca:'); var soThung = 0;
       map[st].forEach(function(r) {
         var sold = hasVal(r.tonDau) ? (Number(r.tonDau) - Number(r.tonCuoi)) : '?';
-        b.push('- ' + String(r.product).trim() + ' : ' + sold + ' thùng.');
+        if (typeof sold === 'number' && isFinite(sold) && sold >= 0 && slProductKey(r.product)) soThung += sold; b.push('- ' + String(r.product).trim() + ' : ' + sold + ' thùng.');
       });
       b.push('');
-      b.push('Báo cáo tồn cuối ca:');
+      var qua = Math.min(soThung, 8); b.push('🎁 Quà khuyến mãi :'); b.push('- Bia Hà Nội : ' + qua + ' lon.'); b.push('- Bia Hà Nội Premium : ' + qua + ' lon.'); b.push(''); b.push('Báo cáo tồn cuối ca:');
       map[st].forEach(function(r) {
         b.push('- ' + String(r.product).trim() + ' : ' + r.tonCuoi + ' thùng.');
       });
