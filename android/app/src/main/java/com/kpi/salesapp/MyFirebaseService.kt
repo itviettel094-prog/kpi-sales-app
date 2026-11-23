@@ -41,7 +41,7 @@ class MyFirebaseService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val n = NotificationCompat.Builder(this, channel)
+        val sp = getSharedPreferences("session", MODE_PRIVATE); val count = sp.getInt("unread", 0) + 1; sp.edit().putInt("unread", count).apply(); val n = NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)   // nên thay bằng icon riêng (trắng, nền trong suốt)
             .setContentTitle(title)
             .setContentText(body)
@@ -52,6 +52,8 @@ class MyFirebaseService : FirebaseMessagingService() {
             .setSound(PushChannels.soundUri(this, raw))            // Android < 8 (>= 8 dùng âm của kênh)
             .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
+            .setNumber(count)
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
             .setContentIntent(pi)
             .build()
 
