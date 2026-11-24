@@ -25,6 +25,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
@@ -122,6 +124,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var execUrl: String
+    private var mediaPlayer: MediaPlayer? = null
     private lateinit var googleClient: GoogleSignInClient
     private var idToken: String = ""
     private var tokenTime: Long = 0L
@@ -223,6 +226,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class Bridge {
+        @JavascriptInterface
+        fun playNativeSound(name: String) {
+            runOnUiThread {
+                val resId = when (name) {
+                    "pgOpen" -> R.raw.pg_ton_dau
+                    "pgClose" -> R.raw.pg_ton_cuoi
+                    "supOpen" -> R.raw.sup_ton_dau_ca
+                    "supClose" -> R.raw.sup_ton_cuoi
+                    "salesOk" -> R.raw.ok
+                    else -> return@runOnUiThread
+                }
+                try {
+                    mediaPlayer?.release()
+                    mediaPlayer = MediaPlayer.create(this@MainActivity, resId)
+                    mediaPlayer?.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    mediaPlayer?.setOnCompletionListener { it.release() }
+                    mediaPlayer?.start()
+                } catch (e: Exception) { }
+            }
+        }
+
         @JavascriptInterface
         fun call(id: Int, action: String, paramsJson: String) {
             runOnUiThread {
@@ -375,6 +404,12 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         hbJob?.cancel()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     private fun goLogin() {
