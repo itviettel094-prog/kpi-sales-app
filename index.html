@@ -11,8 +11,10 @@
       display: flex;
       justify-content: center;
       min-height: 100vh;
+      min-height: 100dvh;
       margin: 0;
-      padding: 10px;
+      padding: 10px 10px 40px;
+      box-sizing: border-box;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     #toast-container {
@@ -103,7 +105,7 @@
 
     .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:50; justify-content:center; align-items:center; padding:16px; }
     .overlay.open { display:flex; }
-    .modal { background:#fff; border-radius:14px; padding:18px; max-width:360px; width:100%; border:2px solid #28a745; max-height:90vh; overflow-y:auto; box-sizing:border-box; }
+    .modal { background:#fff; border-radius:14px; padding:18px; max-width:360px; width:100%; border:2px solid #28a745; max-height:90vh; max-height:90dvh; -webkit-overflow-scrolling:touch; overflow-y:auto; box-sizing:border-box; }
     .modal h3 { margin:0 0 10px; font-size:.92rem; color:#1e7e34; text-transform:uppercase; text-align:center; }
     .modal-actions { display:flex; gap:8px; margin-top:14px; }
     .btn-cancel { flex:1; background:#eee; color:#555; border:none; padding:9px 0; border-radius:8px; font-weight:700; font-size:.82rem; cursor:pointer; }
@@ -147,7 +149,7 @@
     .badge { position:absolute; top:-8px; right:-4px; min-width:17px; height:17px; padding:0 4px; box-sizing:border-box; border-radius:999px; background:#dc3545; color:#fff; font-size:.62rem; font-weight:800; line-height:13px; text-align:center; border:2px solid #fff; }
     .blocker { display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); justify-content:center; align-items:center; padding:16px; }
 .blocker.open { display:flex; }
-.blocker-box { background:#fff; border:2px solid #28a745; border-radius:14px; padding:18px; max-width:380px; width:100%; max-height:85vh; overflow-y:auto; box-sizing:border-box; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+.blocker-box { background:#fff; border:2px solid #28a745; border-radius:14px; padding:18px; max-width:380px; width:100%; max-height:85vh; max-height:85dvh; overflow-y:auto; box-sizing:border-box; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.3); }
 .blocker-title { font-weight:800; font-size:.95rem; color:#1e7e34; margin-bottom:10px; text-transform:uppercase; }
 .blocker-title.err { color:#dc3545; }
 .blocker-body { font-size:.8rem; color:#333; line-height:1.6; text-align:left; }
