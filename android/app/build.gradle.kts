@@ -65,6 +65,9 @@ dependencies {
     // Gọi API (OkHttp)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // Coroutines (chạy mạng nền, không đơ UI)
+        // Coroutines (chạy mạng nền, không đơ UI)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // Số đỏ (badge) trên icon app, giống Zalo
+    implementation("me.leolin:ShortcutBadger:1.1.22@aar")
 }
