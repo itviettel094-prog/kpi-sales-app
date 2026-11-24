@@ -1465,7 +1465,7 @@ function saveStockEntry() {
   btn.disabled = true; btn.textContent = 'ĐANG LƯU...';
   var savedMode = stockMode;
   var modeTxt = savedMode === 'open' ? 'TỒN ĐẦU' : 'TỒN CUỐI';
-  showBlocker('Đang lưu ' + modeTxt + '...', 'Vui lòng chờ, không bấm hoặc nhập thêm.', true, false);
+  showBlocker('Đang lưu ' + modeTxt + '...', '<div style="text-align:center;width:100%">Vui lòng chờ, không bấm hoặc nhập thêm.</div>', true, false);
 
   GAS_RUN
     .withSuccessHandler(function(res) {
@@ -2356,11 +2356,15 @@ Object.keys(SOUND_FILES).forEach(function(k) {
 function unlockSounds() {
   if (_sndUnlocked) return;
   _sndUnlocked = true;
+  ['click', 'touchstart', 'keydown'].forEach(function(ev) { document.removeEventListener(ev, unlockSounds); });
+  if (window.AndroidBridge) return;   // app Android tự phát âm thanh, không cần "mở khoá"
   Object.keys(_snd).forEach(function(k) {
-    var a = _snd[k]; a.muted = true;
-    var done = function() { a.pause(); a.currentTime = 0; a.muted = false; };
+    var a = _snd[k];
+    if (!a.paused) return;   // đang phát thì không đụng vào
+    a.muted = true;
+    var done = function() { if (a._real) { a.muted = false; return; } a.pause(); a.currentTime = 0; a.muted = false; };
     var p = a.play();
-    if (p && p.then) p.then(done, function() { a.muted = false; _sndUnlocked = false; }); else done();
+    if (p && p.then) p.then(done, function() { a.muted = false; }); else done();
   });
 }
 ['click', 'touchstart', 'keydown'].forEach(function(ev) {
@@ -2373,7 +2377,7 @@ function playSound(name) {
   }
   var a = _snd[name]; if (!a) return;
   Object.keys(_snd).forEach(function(k) { try { _snd[k].pause(); _snd[k].currentTime = 0; } catch (e) {} });
-  try { a.muted = false; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {}
+  try { a._real = true; a.muted = false; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {}
 }
 function runSoundQueue() {
   if (_sndBusy || !_sndQueue.length) return;
