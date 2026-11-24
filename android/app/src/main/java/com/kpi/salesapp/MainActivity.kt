@@ -78,6 +78,7 @@ private const val SHIM_JS = """
     submitStockBatch:   ['submitStockBatch', D, function (a) { return a[0]; }],
     adminSetDelay:      ['adminSetDelay', D, function (a) { return { minutes: a[0] }; }],
     adminSetSalesEnabled: ['adminSetSalesEnabled', D, function (a) { return { on: a[0] }; }],
+    adminSetViewScope:  ['adminSetViewScope', D, function (a) { return { viewOwn: a[0], supOwn: a[1] }; }],
     adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
     adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
     adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }]
