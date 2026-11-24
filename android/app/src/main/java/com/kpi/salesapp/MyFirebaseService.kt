@@ -67,7 +67,7 @@ class MyFirebaseService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setSound(PushChannels.soundUri(this, raw))            // Android < 8 (>= 8 dùng âm của kênh)
+            .setSound(null)
             .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
             .setNumber(unread)
@@ -77,6 +77,7 @@ class MyFirebaseService : FirebaseMessagingService() {
 
         NotificationManagerCompat.from(this).notify(NOTIF_ID, n)
         ShortcutBadger.applyCount(this, unread)
+        PushChannels.play(this, raw)
     }
 
     companion object {
