@@ -25,7 +25,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.webkit.JavascriptInterface
@@ -204,6 +203,7 @@ class MainActivity : AppCompatActivity() {
             .replaceFirst("<head>", "<head><script>$SHIM_JS</script>")
         webView.loadDataWithBaseURL("https://appassets.local/", html, "text/html", "UTF-8", null)
                 askLocationConsent()
+        askBadgePermission()
     }
 
     // ===== THÔNG BÁO ĐẨY (FCM) =====
@@ -337,6 +337,38 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Không") { _, _ -> prefs.edit().putBoolean("locAsked", true).apply() }
             .setCancelable(false)
             .show()
+    }
+
+    private fun askBadgePermission() {
+        val prefs = getSharedPreferences("session", MODE_PRIVATE)
+        if (prefs.getBoolean("badgeAsked", false)) return
+        prefs.edit().putBoolean("badgeAsked", true).apply()
+        AlertDialog.Builder(this)
+            .setTitle("Hiện số thông báo trên icon")
+            .setMessage("Để icon ứng dụng hiện số tin nhắn chưa đọc (giống Zalo), hãy bật mục \"Hiện số trên icon\" trong màn hình cài đặt sắp mở ra.")
+            .setPositiveButton("Mở cài đặt") { _, _ -> openBadgeSettings() }
+            .setNegativeButton("Để sau", null)
+            .setCancelable(true)
+            .show()
+    }
+
+    private fun openBadgeSettings() {
+        val pkg = packageName
+        val intents = listOf(
+            Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                putExtra("extra_pkgname", pkg)
+            },
+            Intent("android.settings.APP_NOTIFICATION_SETTINGS").apply {
+                putExtra("android.provider.extra.APP_PACKAGE", pkg)
+            },
+            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", pkg, null)
+            }
+        )
+        for (i in intents) {
+            try { startActivity(i); return } catch (e: Exception) { }
+        }
     }
 
     @android.annotation.SuppressLint("MissingPermission")
