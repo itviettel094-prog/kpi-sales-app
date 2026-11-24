@@ -229,24 +229,28 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun playNativeSound(name: String) {
             runOnUiThread {
-                val resId = when (name) {
-                    "pgOpen" -> R.raw.pg_ton_dau
-                    "pgClose" -> R.raw.pg_ton_cuoi
-                    "supOpen" -> R.raw.sup_ton_dau_ca
-                    "supClose" -> R.raw.sup_ton_cuoi
-                    "salesOk" -> R.raw.ok
+                val assetPath = when (name) {
+                    "pgOpen" -> "sounds/pg-ton-dau.mp3"
+                    "pgClose" -> "sounds/pg-ton-cuoi.mp3"
+                    "supOpen" -> "sounds/sup-ton-dau-ca.mp3"
+                    "supClose" -> "sounds/sup-ton-cuoi.mp3"
+                    "salesOk" -> "sounds/ok.mp3"
                     else -> return@runOnUiThread
                 }
                 try {
                     mediaPlayer?.release()
-                    mediaPlayer = MediaPlayer.create(this@MainActivity, resId)
+                    mediaPlayer = MediaPlayer()
                     mediaPlayer?.setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                             .build()
                     )
+                    val afd = assets.openFd(assetPath)
+                    mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
                     mediaPlayer?.setOnCompletionListener { it.release() }
+                    mediaPlayer?.prepare()
                     mediaPlayer?.start()
                 } catch (e: Exception) { }
             }
