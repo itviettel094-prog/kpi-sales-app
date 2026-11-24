@@ -1,467 +1,522 @@
-package com.kpi.salesapp
+/*************************************************************
+ * FORM NHẬP DỮ LIỆU NGHIỆM THU NHÂN SỰ - MINIMART/TẠP HÓA
+ *************************************************************/
 
-import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.media.AudioAttributes
-import android.os.Build
-import com.google.firebase.messaging.FirebaseMessaging
-import androidx.activity.result.IntentSenderRequest
-import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.LocationSettingsRequest
-import com.google.android.gms.location.Priority
-import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationManager
-import android.net.Uri
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.core.location.LocationManagerCompat
-import androidx.core.os.CancellationSignal
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.media.MediaPlayer
-import android.os.Bundle
-import android.webkit.JavascriptInterface
-import android.webkit.JsPromptResult
-import android.webkit.JsResult
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.EditText
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import me.leolin.shortcutbadger.ShortcutBadger
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import org.json.JSONObject
-import kotlin.coroutines.resume
+// (Tuỳ chọn) ID file ảnh trên Google Drive. Để '' thì script tự vẽ nền.
+// ID là đoạn giữa /d/ và /view trong link Drive của ảnh.
+const COVER_FILE_ID = '';
+const BG_FILE_ID = '';
 
-// Đoạn JS này được chèn vào index.html để thay thế google.script.run (chỉ chạy được trong Apps Script)
-private const val SHIM_JS = """
-(function () {
-  var pending = {}, seq = 0;
-  // Trong app: không cho trang tự phát/mở khoá Audio (tránh ngắt tiếng thông báo). Âm thanh do AndroidBridge.playNativeSound phát.
-  window.Audio = function () {
-    return { play: function () { return Promise.resolve(); }, pause: function () {}, load: function () {},
-             muted: false, paused: true, currentTime: 0, preload: 'auto', onended: null, onerror: null };
-  };
-  window.__nativeResult = function (id, json) {
-    var cb = pending[id]; if (!cb) return; delete pending[id];
-    cb(JSON.parse(json));
-  };
-  function nativeCall(action, params) {
-    return new Promise(function (resolve) {
-      var id = ++seq; pending[id] = resolve;
-      AndroidBridge.call(id, action, JSON.stringify(params || {}));
-    });
-  }
-  var D = 'direct', V = 'data';
-  var API = {
-    getInitData:        ['getInitData', V, function (a) { return { date: a[0] }; }],
-    getSalesUsed:       ['getSalesUsed', V, function (a) { return { date: a[0] }; }],
-    getStockBundle:     ['getStockBundle', V, function (a) { return { date: a[0] }; }],
-    getHistoryBundle:   ['getHistoryBundle', V, function (a) { return {}; }],
-    getStockHistory:    ['getStockHistory', V, function (a) { return {}; }],
-    getPresence:        ['getPresence', V, function (a) { return {}; }],
-    getStoreInfo:       ['getStoreInfo', V, function (a) { return {}; }],
-    addNewStore:        ['addNewStore', V, function (a) { return { name: a[0] }; }],
-    addNewProduct:      ['addNewProduct', V, function (a) { return { name: a[0] }; }],
-    updateSales:        ['updateSales', V, function (a) { return { rowIndex: a[0], rec: a[1] }; }],
-    deleteSales:        ['deleteSales', V, function (a) { return { rowIndex: a[0] }; }],
-    updateStock:        ['updateStock', V, function (a) { return { rowIndex: a[0], rec: a[1] }; }],
-    deleteStock:        ['deleteStock', V, function (a) { return { rowIndex: a[0] }; }],
-    submitSalesBatch:   ['submitSalesBatch', D, function (a) { return a[0]; }],
-    submitStockBatch:   ['submitStockBatch', D, function (a) { return a[0]; }],
-    adminSetDelay:      ['adminSetDelay', D, function (a) { return { minutes: a[0] }; }],
-    adminSetSalesEnabled: ['adminSetSalesEnabled', D, function (a) { return { on: a[0] }; }],
-    adminSetViewScope:  ['adminSetViewScope', D, function (a) { return { viewOwn: a[0], supOwn: a[1] }; }],
-    adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
-    adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
-    adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }],
-    adminGetSyncStatus: ['adminGetSyncStatus', D, function (a) { return { date: a[0] }; }],
-    adminSyncStore:     ['adminSyncStore', D, function (a) { return { date: a[0], store: a[1] }; }]
-  };
-  function run(name, args, ok, fail) {
-    ok = ok || function () {};
-    fail = fail || function (e) { console.error(e); };
-    if (name === 'adminLogout') { ok('OK'); return; }
-    if (name === 'requestAdminOtp' || name === 'verifyAdminOtp') {
-      ok({ ok: false, error: 'Trong app, quyền admin được xác định theo email Google đã đăng nhập.' });
-      return;
+const SHEET_ID = '1ImZFyapmikG-V438kvuqcBSRkSyzoXhQkVz9_LG0oiM';
+
+const FONT = 'Times New Roman';
+const RED = '#E80205';
+const BLACK = '#000000';
+const BG_COLOR = '#EDEDED';
+const DATES_PER_SLIDE = 6;
+let ZOOM_QUEUE = [];
+
+// ====== WEB APP ======
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Nhập dữ liệu nghiệm thu')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function getShopList() {
+  kiemTraMoCua_();
+  const sh = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
+  const n = sh.getLastRow();
+  if (n < 2) return [];
+  return sh.getRange(2, 1, n - 1, 2).getValues()
+    .filter(function (r) { return r[0] !== ''; })
+    .map(function (r) { return { name: String(r[0]).trim(), address: String(r[1]).trim() }; });
+}
+
+function submitShop(payload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    kiemTraMoCua_();
+    const pres = getOrCreateMasterPresentation_();
+    
+    cleanDataSlides_(pres);
+    ZOOM_QUEUE = [];
+    const geo = computeGeometry_(pres);
+
+    const allDates = payload.dates || [];
+    const totalSlides = Math.max(1, Math.ceil(allDates.length / DATES_PER_SLIDE));
+    const slideUrls = [];
+
+    for (let chunk = 0; chunk < totalSlides; chunk++) {
+      const start = chunk * DATES_PER_SLIDE;
+      const chunkDates = allDates.slice(start, start + DATES_PER_SLIDE);
+      const chunkImages = (payload.images || [])
+        .filter(function (im) { return im.dateIndex >= start && im.dateIndex < start + DATES_PER_SLIDE; })
+        .map(function (im) { return Object.assign({}, im, { dateIndex: im.dateIndex - start }); });
+
+      const part = totalSlides > 1 ? '  (phần ' + (chunk + 1) + '/' + totalSlides + ')' : '';
+      const slide = buildDataSlide_(pres, geo, payload.shopName, payload.address + part, chunkDates, chunkImages);
+      slideUrls.push(pres.getUrl() + '#slide=id.' + slide.getObjectId());
     }
-    var spec = API[name];
-    if (!spec) { fail(new Error('Chưa hỗ trợ trong app: ' + name)); return; }
-    nativeCall(spec[0], spec[2](args)).then(function (res) {
-      if (spec[1] === 'direct') ok(res);
-      else if (res && res.ok) ok(res.data);
-      else fail(new Error((res && res.error) || 'Lỗi không xác định'));
-    });
+
+    buildZoomSlides_(pres, geo);
+    pres.saveAndClose();
+    const exp = exportPresentationAsPptx_(pres.getId());
+    return { ok: true, presentationUrl: pres.getUrl(), slideUrls: slideUrls, downloadUrl: exp.url, fileId: exp.id };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
   }
-  function makeRunner(ok, fail) {
-    return new Proxy({}, {
-      get: function (t, name) {
-        if (name === 'withSuccessHandler') return function (f) { return makeRunner(f, fail); };
-        if (name === 'withFailureHandler') return function (f) { return makeRunner(ok, f); };
-        return function () { run(name, Array.prototype.slice.call(arguments), ok, fail); };
-      }
-    });
+}
+
+// ====== NỀN ======
+function applyBackground_(slide, pres, fileId) {
+  if (fileId) {
+    const img = slide.insertImage(DriveApp.getFileById(fileId).getBlob());
+    img.setLeft(0).setTop(0).setWidth(pres.getPageWidth()).setHeight(pres.getPageHeight());
+    img.sendToBack();
+  } else {
+    slide.getBackground().setSolidFill(BG_COLOR);
   }
-  window.google = { script: { run: makeRunner(null, null) } };
-  window.addEventListener('load', function () {
-    nativeCall('isAdmin', {}).then(function (r) {
-      if (r && r.ok && r.isAdmin && typeof setAdmin === 'function') setAdmin(true, 'native');
-    });
+}
+
+function addRect_(slide, x, y, w, h, color) {
+  const s = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, x, y, w, h);
+  s.getFill().setSolidFill(color);
+  s.getBorder().setTransparent();
+  return s;
+}
+
+function addText_(slide, text, x, y, w, h, size, color, bold, italic) {
+  const t = slide.insertTextBox(text, x, y, w, h);
+  t.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
+  const tx = t.getText();
+  tx.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+  tx.getTextStyle().setFontFamily(FONT).setFontSize(size)
+    .setBold(!!bold).setItalic(!!italic).setForegroundColor(color);
+  return t;
+}
+
+// ====== DỌN DỮ LIỆU CŨ ======
+const PROTECTED_SLIDES = 2;
+
+function cleanDataSlides_(pres) {
+  const slides = pres.getSlides();
+  for (let i = slides.length - 1; i >= PROTECTED_SLIDES; i--) {
+    slides[i].remove();
+  }
+}
+
+// ====== FILE MASTER ======
+function getOrCreateMasterPresentation_() {
+  const props = PropertiesService.getScriptProperties();
+  const savedId = props.getProperty('MASTER_PRESENTATION_ID');
+  if (savedId) {
+    try { return SlidesApp.openById(savedId); } catch (e) { /* mất file -> tạo mới */ }
+  }
+
+  const pres = SlidesApp.create('Nghiệm thu nhân sự - Minimart Tạp hóa');
+  const W = pres.getPageWidth();
+  const H = pres.getPageHeight();
+  const fs = W / 960;
+
+  // Trang 1: bìa
+  const s1 = pres.getSlides()[0];
+  s1.getPageElements().forEach(function (el) { el.remove(); });
+  if (COVER_FILE_ID) {
+    applyBackground_(s1, pres, COVER_FILE_ID);
+  } else {
+    s1.getBackground().setSolidFill('#FFFFFF');
+    addRect_(s1, 0, 0, W, H * 0.06, RED);
+    addRect_(s1, 0, H * 0.94, W, H * 0.06, RED);
+    addText_(s1, 'HANOI', 0, H * 0.14, W, H * 0.12, Math.round(36 * fs), RED, true, false);
+    addText_(s1, 'TIẾP NỐI TINH HOA\nKHÔNG NGỪNG TIẾN BƯỚC',
+      0, H * 0.32, W, H * 0.36, Math.round(40 * fs), RED, true, false);
+    addRect_(s1, W * 0.3, H * 0.72, W * 0.4, 3, RED);
+    addText_(s1, 'Nghiệm thu nhân sự - Minimart / Tạp hóa',
+      0, H * 0.76, W, H * 0.1, Math.round(18 * fs), BLACK, false, true);
+  }
+
+  // Trang 2: Khu vực Hà Nội 2
+  const s2 = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+  applyBackground_(s2, pres, BG_FILE_ID);
+  addText_(s2, 'Khu vực Hà Nội 2', 0, H * 0.38, W, H * 0.18, Math.round(32 * fs), RED, true, false);
+
+  props.setProperty('MASTER_PRESENTATION_ID', pres.getId());
+  return pres;
+}
+
+// ====== BỐ CỤC ======
+function computeGeometry_(pres) {
+  const W = pres.getPageWidth();
+  const H = pres.getPageHeight();
+  const left = W * 0.045;
+  const width = W * 0.91;
+  const top = H * 0.225;
+  const bottom = H * 0.03;
+  const avail = H - top - bottom;
+  const hdrH = Math.round(H * 0.062);
+  const imgH = (avail - 2 * hdrH) / 2;
+  return {
+    W: W, H: H, fs: W / 960,
+    left: left, width: width, top: top,
+    colW: width / 3, hdrH: hdrH, imgH: imgH,
+    pad: Math.max(4, W * 0.008)
+  };
+}
+
+function cellRect_(g, dateIndex) {
+  const col = dateIndex % 3;
+  const group = dateIndex < 3 ? 0 : 1;
+  const headerTop = g.top + group * (g.hdrH + g.imgH);
+  return { left: g.left + col * g.colW, headerTop: headerTop, imgTop: headerTop + g.hdrH };
+}
+
+// ====== TRANG DỮ LIỆU ======
+function buildDataSlide_(pres, g, shopName, address, dates, images) {
+  const slide = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+  applyBackground_(slide, pres, BG_FILE_ID);
+
+  const title = slide.insertTextBox(
+    shopName + '\n' + 'Địa chỉ : ' + address, g.left, g.H * 0.03, g.width, g.H * 0.18);
+  title.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
+  const tt = title.getText();
+  tt.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+  tt.getRange(0, shopName.length).getTextStyle()
+    .setFontFamily(FONT).setFontSize(Math.round(30 * g.fs)).setBold(true).setForegroundColor(RED);
+  tt.getRange(shopName.length, tt.asString().length).getTextStyle()
+    .setFontFamily(FONT).setFontSize(Math.round(17 * g.fs)).setBold(true).setItalic(true).setForegroundColor(RED);
+
+  for (let i = 0; i < DATES_PER_SLIDE; i++) {
+    const r = cellRect_(g, i);
+
+    const header = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, r.left, r.headerTop, g.colW, g.hdrH);
+    styleCell_(header);
+    header.setContentAlignment(SlidesApp.ContentAlignment.MIDDLE);
+    const ht = header.getText();
+    ht.setText('Ngày ' + (dates[i] || ''));
+    ht.getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+    ht.getTextStyle().setFontFamily(FONT).setFontSize(Math.round(14 * g.fs))
+      .setItalic(true).setBold(false).setUnderline(false).setForegroundColor(BLACK);
+
+    const body = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, r.left, r.imgTop, g.colW, g.imgH);
+    styleCell_(body);
+  }
+
+  const byDate = {};
+  images.forEach(function (im) {
+    if (!byDate[im.dateIndex]) byDate[im.dateIndex] = [];
+    byDate[im.dateIndex][im.slot] = im;
   });
-})();
-"""
+  Object.keys(byDate).forEach(function (k) {
+    const idx = parseInt(k, 10);
+    if (idx < DATES_PER_SLIDE) placeImagesInCell_(slide, g, idx, byDate[idx]);
+  });
 
-class MainActivity : AppCompatActivity() {
+  return slide;
+}
 
-    private lateinit var webView: WebView
-    private lateinit var execUrl: String
-    private var mediaPlayer: MediaPlayer? = null
-    private lateinit var googleClient: GoogleSignInClient
-    private var idToken: String = ""
-    private var tokenTime: Long = 0L
+function styleCell_(shape) {
+  shape.getFill().setSolidFill('#FFFFFF');
+  shape.getBorder().getLineFill().setSolidFill(BLACK);
+  shape.getBorder().setWeight(0.75);
+  shape.getBorder().setDashStyle(SlidesApp.DashStyle.SOLID);
+}
 
-    @SuppressLint("SetJavaScriptEnabled")
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+function placeImagesInCell_(slide, g, dateIndex, list) {
+  const items = [];
+  [0, 1].forEach(function (s) { if (list[s] && list[s].base64) items.push(list[s]); });
+  if (!items.length) return;
 
-        execUrl = getString(R.string.exec_url)
-        idToken = SessionManager.getIdToken(this) ?: run { goLogin(); return }
+  const r = cellRect_(g, dateIndex);
+  const gap = g.pad;
+  const innerW = g.colW - 2 * g.pad;
+  const innerH = g.imgH - 2 * g.pad;
+  const slotW = (innerW - gap) / 2;
 
-        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.web_client_id))
-            .requestEmail()
-            .build()
-        googleClient = GoogleSignIn.getClient(this, gso)
+  items.forEach(function (data, i) {
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(data.base64),
+      data.mimeType || 'image/jpeg',
+      data.fileName || ('img_' + dateIndex + '_' + i + '.jpg'));
+    const img = slide.insertImage(blob);
 
-        webView = WebView(this)
-        webView.fitsSystemWindows = true
-        setContentView(webView)
+    const nw = data.w || img.getWidth();
+    const nh = data.h || img.getHeight();
+    const k = Math.min(slotW / nw, innerH / nh);
+    const w = nw * k;
+    const h = nh * k;
 
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.mediaPlaybackRequiresUserGesture = false   // cho phép phát tiếng không cần chạm
-                webView.webViewClient = object : WebViewClient() {
-            // Phục vụ file âm thanh nằm trong assets/sounds/ cho trang web trong app
-            override fun shouldInterceptRequest(view: WebView?, request: android.webkit.WebResourceRequest?): android.webkit.WebResourceResponse? {
-                val u = request?.url
-                val path = u?.path
-                if (u != null && u.host == "appassets.local" && path != null && path.startsWith("/sounds/")) {
-                    // 1) tìm trong assets/sounds/  2) không có thì tìm trong res/raw (đổi "-" thành "_", vd. sup-ton-dau-ca.mp3 -> sup_ton_dau_ca)
-                    try {
-                        return android.webkit.WebResourceResponse("audio/mpeg", null, assets.open(path.trimStart('/')))
-                    } catch (e: Exception) { }
-                    try {
-                        val resName = path.removePrefix("/sounds/").substringBeforeLast('.').replace('-', '_')
-                        val id = resources.getIdentifier(resName, "raw", packageName)
-                        if (id != 0) return android.webkit.WebResourceResponse("audio/mpeg", null, resources.openRawResource(id))
-                    } catch (e: Exception) { }
-                }
-                return super.shouldInterceptRequest(view, request)
-            }
-            override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
-                val url = request?.url ?: return false
-                if (url.host == "appassets.local") return false
-                try { startActivity(Intent(Intent.ACTION_VIEW, url)) } catch (e: Exception) { }
-                return true
-            }
-        }
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
-                AlertDialog.Builder(this@MainActivity).setMessage(message)
-                    .setPositiveButton("OK") { _, _ -> result.confirm() }
-                    .setOnCancelListener { result.cancel() }.show()
-                return true
-            }
-            override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
-                AlertDialog.Builder(this@MainActivity).setMessage(message)
-                    .setPositiveButton("OK") { _, _ -> result.confirm() }
-                    .setNegativeButton("Huỷ") { _, _ -> result.cancel() }
-                    .setOnCancelListener { result.cancel() }.show()
-                return true
-            }
-            override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: JsPromptResult): Boolean {
-                val input = EditText(this@MainActivity)
-                input.setText(defaultValue ?: "")
-                AlertDialog.Builder(this@MainActivity).setMessage(message).setView(input)
-                    .setPositiveButton("OK") { _, _ -> result.confirm(input.text.toString()) }
-                    .setNegativeButton("Huỷ") { _, _ -> result.cancel() }
-                    .setOnCancelListener { result.cancel() }.show()
-                return true
-            }
-        }
-        webView.addJavascriptInterface(Bridge(), "AndroidBridge")
+    const slotLeft = r.left + g.pad + (data.slot || 0) * (slotW + gap);
+    img.setWidth(w).setHeight(h)
+      .setLeft(slotLeft + (slotW - w) / 2)
+      .setTop(r.imgTop + g.pad + (innerH - h) / 2);
+    ZOOM_QUEUE.push({ img: img, blob: blob, slide: slide, nw: nw, nh: nh });
+  });
+}
 
-        val html = assets.open("index.html").bufferedReader().use { it.readText() }
-            .replaceFirst("<head>", "<head><script>$SHIM_JS</script>")
-        webView.loadDataWithBaseURL("https://appassets.local/", html, "text/html", "UTF-8", null)
-                askLocationConsent()
-        askBadgePermission()
+// ====== TRANG PHÓNG TO ẢNH ======
+function buildZoomSlides_(pres, g) {
+  ZOOM_QUEUE.forEach(function (z) {
+    const zs = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+    zs.getBackground().setSolidFill('#000000');
+    const big = zs.insertImage(z.blob);
+    const k = Math.min(g.W / z.nw, g.H / z.nh);
+    const w = z.nw * k, h = z.nh * k;
+    big.setWidth(w).setHeight(h).setLeft((g.W - w) / 2).setTop((g.H - h) / 2);
+    big.setLinkSlide(z.slide);   // bấm ảnh lớn -> về trang dữ liệu
+    const cover = zs.insertShape(SlidesApp.ShapeType.RECTANGLE, 0, 0, g.W, g.H);
+    cover.getFill().setTransparent();
+    cover.getBorder().setTransparent();
+    cover.setLinkSlide(z.slide); // bấm bất kỳ đâu trên trang -> về trang dữ liệu
+    z.img.setLinkSlide(zs);      // bấm ảnh nhỏ -> sang ảnh lớn
+    try { zs.setSkipped(true); } catch (e) {}  // ẩn khỏi trình chiếu tuần tự
+  });
+}
+
+// ====== LƯU VÀO DRIVE ======
+const SAVE_FOLDER_NAME = 'Nghiệm thu nhân sự - Đã lưu';
+const SAVE_PASSWORD = 'Tuyet1986@';
+const SAVE_FOLDER_ID = ''; // tuỳ chọn: dán ID thư mục có sẵn, để '' thì tự tạo theo tên trên
+
+function getSaveFolder_() {
+  if (SAVE_FOLDER_ID) return DriveApp.getFolderById(SAVE_FOLDER_ID);
+  const it = DriveApp.getFoldersByName(SAVE_FOLDER_NAME);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(SAVE_FOLDER_NAME);
+}
+
+function saveShopToDrive(shopName, fileId, fileName, password) {
+  try {
+    kiemTraMoCua_();
+    if (password !== SAVE_PASSWORD) return { ok: false, error: 'Sai mật khẩu.' };
+    if (!fileId) return { ok: false, error: 'Chưa có file. Hãy bấm Gửi dữ liệu trước.' };
+    const folder = getSaveFolder_();
+    const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm');
+    const safe = String(shopName || 'shop').replace(/[\\\/:*?"<>|]/g, '_');
+    const copy = DriveApp.getFileById(fileId).makeCopy(fileName || (safe + ' - ' + stamp + '.pptx'), folder);
+    return { ok: true, url: copy.getUrl(), folderUrl: folder.getUrl() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// ====== TẢI & XÓA FILE XUẤT ======
+function getExportBase64(fileId) {
+  try {
+    kiemTraMoCua_();
+    const bytes = DriveApp.getFileById(fileId).getBlob().getBytes();
+    return { ok: true, base64: Utilities.base64Encode(bytes) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function deleteExport(fileId) {
+  try {
+    DriveApp.getFileById(fileId).setTrashed(true);
+    PropertiesService.getScriptProperties().deleteProperty('LAST_EXPORT_FILE_ID');
+  } catch (e) {}
+}
+
+// ====== XUẤT .PPTX ======
+
+function exportPresentationAsPptx_(presId) {
+  const props = PropertiesService.getScriptProperties();
+  const oldId = props.getProperty('LAST_EXPORT_FILE_ID');
+  if (oldId) {
+    try { DriveApp.getFileById(oldId).setTrashed(true); } catch (e) {}
+  }
+  const src = DriveApp.getFileById(presId);
+  const res = UrlFetchApp.fetch(
+    'https://docs.google.com/presentation/d/' + presId + '/export/pptx',
+    {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Xuất .pptx thất bại (mã ' + res.getResponseCode() + ')');
+  }
+  const f = DriveApp.createFile(res.getBlob().setName(src.getName() + '.pptx'));
+  try {
+    f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) { /* tài khoản công ty có thể chặn chia sẻ, vẫn tiếp tục */ }
+  props.setProperty('LAST_EXPORT_FILE_ID', f.getId());
+  return { id: f.getId(), url: 'https://drive.google.com/uc?export=download&id=' + f.getId() };
+}
+
+
+// ============================================
+// ADMIN: ĐĂNG NHẬP BẰNG MÃ OTP GỬI QUA EMAIL
+// ============================================
+const ADMIN_EMAIL = 'itviettel098@gmail.com';
+
+function adminSendOtp() {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('otp_cooldown')) return { ok: false, error: 'Vui lòng đợi 60 giây rồi bấm gửi lại mã.' };
+
+  const code = String(parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 8), 16) % 900000 + 100000);
+  cache.put('otp_code', code, 300);
+  cache.put('otp_tries', '0', 300);
+  cache.put('otp_cooldown', '1', 60);
+
+  MailApp.sendEmail({
+    to: ADMIN_EMAIL,
+    subject: 'Mã xác thực admin: ' + code,
+    body: 'Mã OTP đăng nhập quản trị của bạn là: ' + code +
+          '\n\nMã có hiệu lực trong 5 phút. Nếu không phải bạn yêu cầu, hãy bỏ qua email này.'
+  });
+  return { ok: true };
+}
+
+function adminLogin(code) {
+  const cache = CacheService.getScriptCache();
+  const real = cache.get('otp_code');
+  if (!real) return { ok: false, error: 'Mã đã hết hạn hoặc chưa được gửi, hãy bấm gửi mã mới.' };
+
+  const tries = Number(cache.get('otp_tries') || 0) + 1;
+  if (tries > 5) {
+    cache.remove('otp_code');
+    return { ok: false, error: 'Nhập sai quá 5 lần, hãy gửi mã mới.' };
+  }
+  cache.put('otp_tries', String(tries), 300);
+
+  if (String(code || '').trim() !== real) return { ok: false, error: 'Sai mã OTP.' };
+
+  cache.remove('otp_code');
+  const token = Utilities.getUuid();
+  cache.put('admin_' + token, ADMIN_EMAIL, 21600); // phiên 6 giờ
+  return { ok: true, token: token, email: ADMIN_EMAIL };
+}
+
+function adminCheck(token) {
+  const email = token ? CacheService.getScriptCache().get('admin_' + token) : null;
+  return email ? { ok: true, email: email } : { ok: false };
+}
+
+function adminLogout(token) {
+  if (token) CacheService.getScriptCache().remove('admin_' + token);
+  return { ok: true };
+}
+// ============================================
+// ADMIN: KHÓA WEB + THỐNG KÊ ONLINE / TRUY CẬP
+// ============================================
+function isSiteEnabled_() {
+  return PropertiesService.getScriptProperties().getProperty('SITE_ENABLED') !== 'false';
+}
+
+function kiemTraMoCua_() {
+  if (!isSiteEnabled_()) throw new Error('SITE_DISABLED');
+}
+
+function homNay_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function layOnline_() {
+  const raw = CacheService.getScriptCache().get('online');
+  const map = raw ? JSON.parse(raw) : {};
+  const now = Date.now();
+  Object.keys(map).forEach(function (k) { if (now - map[k].t > 150000) delete map[k]; });
+  return map;
+}
+
+function layLuot_() {
+  const raw = PropertiesService.getScriptProperties().getProperty('VISITS');
+  return raw ? JSON.parse(raw) : { total: 0, days: {} };
+}
+
+// Trình duyệt gọi mỗi 60 giây: báo "đang online" + đếm lượt truy cập mới
+function ping(clientId, newVisit, shopName) {
+  if (clientId) {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(5000);
+      const map = layOnline_();
+      map[String(clientId).slice(0, 40)] = { t: Date.now(), shop: String(shopName || '').slice(0, 100) };
+      CacheService.getScriptCache().put('online', JSON.stringify(map), 600);
+
+      if (newVisit) {
+        const v = layLuot_();
+        const d = homNay_();
+        v.total++;
+        v.days[d] = (v.days[d] || 0) + 1;
+        Object.keys(v.days).sort().slice(0, -30).forEach(function (k) { delete v.days[k]; });
+        PropertiesService.getScriptProperties().setProperty('VISITS', JSON.stringify(v));
+      }
+    } catch (e) {
+    } finally {
+      try { lock.releaseLock(); } catch (e2) {}
     }
+  }
+  return { enabled: isSiteEnabled_() };
+}
 
-    // ===== THÔNG BÁO ĐẨY (FCM) =====
-    private val notifPermLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+function thongKe_() {
+  const now = Date.now();
+  const map = layOnline_();
+  const v = layLuot_();
+  return {
+    ok: true,
+    enabled: isSiteEnabled_(),
+    visitsTotal: v.total,
+    visitsToday: v.days[homNay_()] || 0,
+    online: Object.keys(map).map(function (k) {
+      return { shop: map[k].shop, giay: Math.round((now - map[k].t) / 1000) };
+    }).sort(function (a, b) { return a.giay - b.giay; })
+  };
+}
 
-    private fun setupPush() {
-        PushChannels.ensure(this)
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
+function adminStats(token) {
+  if (!adminCheck(token).ok) return { ok: false, error: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' };
+  return thongKe_();
+}
 
-    private fun registerPushToken() {
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { t ->
-            lifecycleScope.launch {
-                try { ApiClient.call(execUrl, "registerPush", freshToken(), JSONObject().put("token", t)) } catch (e: Exception) { }
-            }
-        }
-    }
+function adminSetEnabled(token, enabled) {
+  if (!adminCheck(token).ok) return { ok: false, error: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' };
+  PropertiesService.getScriptProperties().setProperty('SITE_ENABLED', enabled ? 'true' : 'false');
+  return thongKe_();
+}
 
-    inner class Bridge {
-        @JavascriptInterface
-        fun playNativeSound(name: String) {
-            runOnUiThread {
-                val assetPath = when (name) {
-                    "pgOpen" -> "sounds/pg-ton-dau.mp3"
-                    "pgClose" -> "sounds/pg-ton-cuoi.mp3"
-                    "supOpen" -> "sounds/sup-ton-dau-ca.mp3"
-                    "supClose" -> "sounds/sup-ton-cuoi.mp3"
-                    "salesOk" -> "sounds/ok.mp3"
-                    else -> return@runOnUiThread
-                }
-                try {
-                    mediaPlayer?.release()
-                    mediaPlayer = MediaPlayer()
-                    mediaPlayer?.setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
-                    val afd = assets.openFd(assetPath)
-                    mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                    afd.close()
-                    mediaPlayer?.setOnCompletionListener { it.release() }
-                    mediaPlayer?.prepare()
-                    mediaPlayer?.start()
-                } catch (e: Exception) { }
-            }
-        }
+// =====================================================================
+//  THÊM VÀO CUỐI FILE Code.gs
+//  Cho phép GitHub Pages gọi Apps Script qua fetch (không cần đăng nhập Google)
+// =====================================================================
 
-        @JavascriptInterface
-        fun call(id: Int, action: String, paramsJson: String) {
-            runOnUiThread {
-                lifecycleScope.launch {
-                    val token = freshToken()
-                    val res: JSONObject = try {
-                        ApiClient.call(execUrl, action, token, JSONObject(paramsJson))
-                    } catch (e: Exception) {
-                        JSONObject().put("ok", false).put("error", "Không kết nối được server: ${e.message}")
-                    }
-                    if (res.optString("error").startsWith("Phiên đăng nhập")) {
-                        Toast.makeText(this@MainActivity, "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Toast.LENGTH_LONG).show()
-                        SessionManager.clear(this@MainActivity)
-                        goLogin()
-                        return@launch
-                    }
-                    val quoted = JSONObject.quote(res.toString())
-                        .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
-                    webView.evaluateJavascript("window.__nativeResult($id, $quoted);", null)
-                }
-            }
-        }
-    }
+var WEB_ALLOWED_NGHIEMTHU = [
+  'getShopList', 'submitShop', 'getExportBase64', 'deleteExport',
+  'saveShopToDrive', 'ping', 'adminSendOtp', 'adminLogin',
+  'adminCheck', 'adminLogout', 'adminStats', 'adminSetEnabled'
+];
 
-    // ID token Google chỉ sống ~1 giờ nên tự làm mới ngầm khi đã cũ
-    private suspend fun freshToken(): String {
-        val now = System.currentTimeMillis()
-        if (idToken.isNotEmpty() && now - tokenTime < 40 * 60 * 1000L) return idToken
-        val t = suspendCancellableCoroutine<String?> { cont ->
-            googleClient.silentSignIn()
-                .addOnSuccessListener { acc -> cont.resume(acc.idToken) }
-                .addOnFailureListener { cont.resume(null) }
-        }
-        if (t != null) {
-            idToken = t
-            tokenTime = now
-            SessionManager.saveLogin(this, t, SessionManager.getEmail(this) ?: "")
-        }
-        return idToken
-    }
+function doPost(e) {
+  var body;
+  try {
+    body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  } catch (err) {
+    return _ntJsonOut({ error: 'Dữ liệu không hợp lệ.' });
+  }
 
-        // ===== ONLINE + VỊ TRÍ =====
-    private var hbJob: Job? = null
+  var fn   = body.fn;
+  var args = body.args || [];
 
-    private val locPermLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { ensureGpsOn() }
+  if (!fn || WEB_ALLOWED_NGHIEMTHU.indexOf(fn) < 0) {
+    return _ntJsonOut({ error: 'Hàm không hợp lệ: ' + fn });
+  }
 
-    private val gpsResolutionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult()
-    ) { }
+  var result;
+  try {
+    result = globalThis[fn].apply(null, args);
+  } catch (err) {
+    return _ntJsonOut({ error: String(err && err.message || err) });
+  }
 
-    // Nếu GPS đang tắt thì hiện hộp "Bật vị trí" của hệ thống (bấm 1 lần là bật)
-    private fun ensureGpsOn() {
-        if (!hasLocPerm()) return
-        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60_000L).build()
-        val settingsReq = LocationSettingsRequest.Builder().addLocationRequest(req).build()
-        LocationServices.getSettingsClient(this).checkLocationSettings(settingsReq)
-            .addOnFailureListener { e ->
-                if (e is ResolvableApiException) {
-                    try {
-                        gpsResolutionLauncher.launch(IntentSenderRequest.Builder(e.resolution).build())
-                    } catch (ex: Exception) { }
-                }
-            }
-    }
+  return _ntJsonOut({ result: result });
+}
 
-    private fun hasLocPerm(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
-    private fun askLocationConsent() {
-        if (hasLocPerm()) return
-        val prefs = getSharedPreferences("session", MODE_PRIVATE)
-        if (prefs.getBoolean("locAsked", false)) return
-        AlertDialog.Builder(this)
-            .setTitle("Chia sẻ hoạt động & vị trí")
-            .setMessage("Khi bạn đang mở ứng dụng, quản lý sẽ thấy bạn đang online, vị trí gần nhất và thao tác cuối cùng của bạn. Khi tắt ứng dụng sẽ không ghi vị trí.")
-            .setPositiveButton("Đồng ý") { _, _ ->
-                prefs.edit().putBoolean("locAsked", true).apply()
-                locPermLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-            }
-            .setNegativeButton("Không") { _, _ -> prefs.edit().putBoolean("locAsked", true).apply() }
-            .setCancelable(false)
-            .show()
-    }
-
-    private fun askBadgePermission() {
-        val prefs = getSharedPreferences("session", MODE_PRIVATE)
-        if (prefs.getBoolean("badgeAsked", false)) return
-        prefs.edit().putBoolean("badgeAsked", true).apply()
-        AlertDialog.Builder(this)
-            .setTitle("Hiện số thông báo trên icon")
-            .setMessage("Để icon ứng dụng hiện số tin nhắn chưa đọc (giống Zalo), hãy bật mục \"Hiện số trên icon\" trong màn hình cài đặt sắp mở ra.")
-            .setPositiveButton("Mở cài đặt") { _, _ -> openBadgeSettings() }
-            .setNegativeButton("Để sau", null)
-            .setCancelable(true)
-            .show()
-    }
-
-    private fun openBadgeSettings() {
-        val pkg = packageName
-        val intents = listOf(
-            Intent("miui.intent.action.APP_PERM_EDITOR").apply {
-                setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
-                putExtra("extra_pkgname", pkg)
-            },
-            Intent("android.settings.APP_NOTIFICATION_SETTINGS").apply {
-                putExtra("android.provider.extra.APP_PACKAGE", pkg)
-            },
-            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", pkg, null)
-            }
-        )
-        for (i in intents) {
-            try { startActivity(i); return } catch (e: Exception) { }
-        }
-    }
-
-    @android.annotation.SuppressLint("MissingPermission")
-    private fun lastKnownLocation(): Location? {
-        if (!hasLocPerm()) return null
-        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
-        return lm.getProviders(true).mapNotNull {
-            try { lm.getLastKnownLocation(it) } catch (e: Exception) { null }
-        }.maxByOrNull { it.time }
-    }
-
-    @android.annotation.SuppressLint("MissingPermission")
-    private suspend fun currentLocation(): Location? {
-        if (!hasLocPerm()) return null
-        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
-        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val provider = when {
-            fine && lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> return lastKnownLocation()
-        }
-        val loc = withTimeoutOrNull(8000L) {
-            suspendCancellableCoroutine<Location?> { cont ->
-                val cs = CancellationSignal()
-                cont.invokeOnCancellation { cs.cancel() }
-                LocationManagerCompat.getCurrentLocation(lm, provider, cs, ContextCompat.getMainExecutor(this@MainActivity)) { l ->
-                    if (cont.isActive) cont.resume(l)
-                }
-            }
-        }
-        return loc ?: lastKnownLocation()
-    }
-
-    private fun startHeartbeat() {
-        if (!::webView.isInitialized) return
-        hbJob?.cancel()
-        hbJob = lifecycleScope.launch {
-            while (true) {
-                val p = JSONObject()
-                val loc = try { currentLocation() } catch (e: Exception) { null }
-                if (loc != null) {
-                    p.put("loc", JSONObject()
-                        .put("lat", loc.latitude).put("lng", loc.longitude).put("acc", loc.accuracy.toDouble()))
-                }
-                try { ApiClient.call(execUrl, "heartbeat", freshToken(), p) } catch (e: Exception) { }
-                delay(60_000L)
-            }
-        }
-    }
-
-        override fun onStart() {
-        getSharedPreferences("session", MODE_PRIVATE).edit()
-            .putInt("unread", 0)
-            .remove("notif_lines")
-            .apply()
-        androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
-        ShortcutBadger.removeCount(this)
-        super.onStart()
-        setupPush()
-        registerPushToken()
-        startHeartbeat()
-        ensureGpsOn()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        hbJob?.cancel()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mediaPlayer?.release()
-        mediaPlayer = null
-    }
-
-    private fun goLogin() {
-        startActivity(Intent(this, LoginActivity::class.java))
-        finish()
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed()
-    }
+function _ntJsonOut(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
