@@ -10,6 +10,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import me.leolin.shortcutbadger.ShortcutBadger
 
 // Nhận thông báo đẩy FCM kể cả khi app đã đóng / tắt màn hình.
 // Server gửi tin "data-only" nên hàm onMessageReceived luôn chạy và tự hiện thông báo kèm âm thanh riêng.
@@ -75,6 +76,7 @@ class MyFirebaseService : FirebaseMessagingService() {
             .build()
 
         NotificationManagerCompat.from(this).notify(NOTIF_ID, n)
+        ShortcutBadger.applyCount(this, unread)
     }
 
     companion object {
