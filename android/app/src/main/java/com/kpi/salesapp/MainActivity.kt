@@ -40,6 +40,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import me.leolin.shortcutbadger.ShortcutBadger
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
@@ -363,6 +364,7 @@ class MainActivity : AppCompatActivity() {
             .remove("notif_lines")
             .apply()
         androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
+        ShortcutBadger.removeCount(this)
         super.onStart()
         setupPush()
         registerPushToken()
