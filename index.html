@@ -244,7 +244,7 @@
           <div class="row row-1" id="k_khachRow" style="display:none">
             <div class="input-group"><label class="input-label">Khách tiếp cận <span style="color:#dc3545">*</span></label><input type="number" id="k_khach" min="0" placeholder="Số khách (bắt buộc)" oninput="this.style.borderColor=''"></div>
           </div>
-          <div class="row row-2">
+          <div class="row row-2" id="k_prodRow">
             <div class="input-group"><label class="input-label">Sản Phẩm</label><select id="k_product" onchange="handleSelectChange('product', this);"></select></div>
             <div class="input-group"><label class="input-label" id="k_qtyLabel">Số Lượng</label><input type="number" id="k_qty" min="0" placeholder="0" onkeydown="if(event.key==='Enter'){addStockLine();}"></div>
           </div>
@@ -1308,6 +1308,7 @@ function refreshStockMode() {
     bOpen.style.display = ''; bClose.style.display = 'none';
     form.style.display = '';
     banner.innerHTML = ''; addBtn.style.display = '';
+    var pr0 = document.getElementById('k_prodRow'); if (pr0) pr0.style.display = '';
     label.textContent = stockMode === 'open' ? 'Tồn Đầu Ngày' : 'Tồn Cuối Ngày'; var kr = document.getElementById('k_khachRow'); if (kr) kr.style.display = (stockMode === 'close') ? '' : 'none';
     return;
   }
@@ -1359,6 +1360,8 @@ function refreshStockMode() {
   var hideForm = (!stockCart.length && avail === 0);
   form.style.display = hideForm ? 'none' : '';
   addBtn.style.display = (avail === 0) ? 'none' : '';
+  var pr = document.getElementById('k_prodRow');
+  if (pr) pr.style.display = (avail === 0) ? 'none' : '';
 }
 
 // Tự cập nhật khi đến giờ mở Tồn cuối (không cần tải lại trang) + làm mới ngầm từ server mỗi ~60 giây
