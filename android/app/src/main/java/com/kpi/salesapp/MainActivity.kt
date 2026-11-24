@@ -51,6 +51,11 @@ import kotlin.coroutines.resume
 private const val SHIM_JS = """
 (function () {
   var pending = {}, seq = 0;
+  // Trong app: không cho trang tự phát/mở khoá Audio (tránh ngắt tiếng thông báo). Âm thanh do AndroidBridge.playNativeSound phát.
+  window.Audio = function () {
+    return { play: function () { return Promise.resolve(); }, pause: function () {}, load: function () {},
+             muted: false, paused: true, currentTime: 0, preload: 'auto', onended: null, onerror: null };
+  };
   window.__nativeResult = function (id, json) {
     var cb = pending[id]; if (!cb) return; delete pending[id];
     cb(JSON.parse(json));
@@ -83,7 +88,9 @@ private const val SHIM_JS = """
     adminSetViewScope:  ['adminSetViewScope', D, function (a) { return { viewOwn: a[0], supOwn: a[1] }; }],
     adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
     adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
-    adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }]
+    adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }],
+    adminGetSyncStatus: ['adminGetSyncStatus', D, function (a) { return { date: a[0] }; }],
+    adminSyncStore:     ['adminSyncStore', D, function (a) { return { date: a[0], store: a[1] }; }]
   };
   function run(name, args, ok, fail) {
     ok = ok || function () {};
