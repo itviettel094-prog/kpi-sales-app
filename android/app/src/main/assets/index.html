@@ -758,7 +758,6 @@ function buildOptionsHtml(list, addLabel, placeholder) {
   var html = '';
   if (placeholder) html += '<option value="">' + placeholder + '</option>';
   html += list.map(function(s){ return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
-  html += '<option value="__add_new__">+ ' + addLabel + '</option>';
   return html;
 }
 
@@ -933,7 +932,6 @@ function renderSalesProductSelect(forceValue) {
     if (!ok) why = salesCart.some(function(c){ return c.product === p; }) ? ' (đã thêm)' : ' (đã nhập hôm nay)';
     return '<option value="' + escHtml(p) + '"' + (ok ? '' : ' disabled') + '>' + escHtml(p + why) + '</option>';
   }).join('');
-  html += '<option value="__add_new__">+ Thêm mới sản phẩm...</option>';
   sel.innerHTML = html;
   if (val && avail.indexOf(val) !== -1) sel.value = val;
   else if (avail.length) sel.value = avail[0];
@@ -1181,7 +1179,6 @@ function renderStockProductSelect(forceValue) {
     }
     return '<option value="' + escHtml(p) + '"' + (ok ? '' : ' disabled') + '>' + escHtml(p + why) + '</option>';
   }).join('');
-  html += '<option value="__add_new__">+ Thêm mới sản phẩm...</option>';
   sel.innerHTML = html;
   if (val && avail.indexOf(val) !== -1) sel.value = val;
   else if (avail.length) sel.value = avail[0];
@@ -1310,7 +1307,7 @@ function refreshStockMode() {
     if (!stockCart.length && stockMode !== 'open') { stockMode = 'open'; applyStockModeButtons(); renderStockProductSelect(''); }
     bOpen.style.display = ''; bClose.style.display = 'none';
     form.style.display = '';
-    banner.innerHTML = ''; addBtn.disabled = false;
+    banner.innerHTML = ''; addBtn.style.display = '';
     label.textContent = stockMode === 'open' ? 'Tồn Đầu Ngày' : 'Tồn Cuối Ngày'; var kr = document.getElementById('k_khachRow'); if (kr) kr.style.display = (stockMode === 'close') ? '' : 'none';
     return;
   }
@@ -1361,7 +1358,7 @@ function refreshStockMode() {
   // Ẩn form khi không còn gì để nhập (và không có dòng chờ lưu)
   var hideForm = (!stockCart.length && avail === 0);
   form.style.display = hideForm ? 'none' : '';
-  addBtn.disabled = (avail === 0);
+  addBtn.style.display = (avail === 0) ? 'none' : '';
 }
 
 // Tự cập nhật khi đến giờ mở Tồn cuối (không cần tải lại trang) + làm mới ngầm từ server mỗi ~60 giây
