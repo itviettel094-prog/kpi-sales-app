@@ -2316,7 +2316,14 @@ function unlockSounds() {
   document.addEventListener(ev, unlockSounds, { passive: true });
 });
 
-function playSound(name) { var a = _snd[name]; if (!a) return; Object.keys(_snd).forEach(function(k) { try { _snd[k].pause(); _snd[k].currentTime = 0; } catch (e) {} }); try { a.muted = false; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {} }
+function playSound(name) {
+  if (window.AndroidBridge && typeof AndroidBridge.playNativeSound === 'function') {
+    try { AndroidBridge.playNativeSound(name); return; } catch (e) {}
+  }
+  var a = _snd[name]; if (!a) return;
+  Object.keys(_snd).forEach(function(k) { try { _snd[k].pause(); _snd[k].currentTime = 0; } catch (e) {} });
+  try { a.muted = false; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {}
+}
 function runSoundQueue() {
   if (_sndBusy || !_sndQueue.length) return;
   var a = _snd[_sndQueue.shift()];
