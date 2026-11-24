@@ -358,7 +358,10 @@ class MainActivity : AppCompatActivity() {
     }
 
         override fun onStart() {
-        getSharedPreferences("session", MODE_PRIVATE).edit().putInt("unread", 0).apply()
+        getSharedPreferences("session", MODE_PRIVATE).edit()
+            .putInt("unread", 0)
+            .remove("notif_lines")
+            .apply()
         androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
         super.onStart()
         setupPush()
