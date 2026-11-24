@@ -284,6 +284,14 @@ details.fold[open] > summary { margin-bottom:8px; }
       <!-- VIEW: REPORT (báo cáo checkin để copy) -->
       <div class="view" id="view-report" style="display:none">
         <div class="section-title">Báo Cáo Checkin</div>
+        <div id="supLinkBtn" style="display:none;margin-bottom:10px">
+          <a href="https://itviettel094-prog.github.io/BaoQuaTangBiaHaBeCo/"
+             target="_blank" rel="noopener"
+             class="btn-submit"
+             style="display:block;text-align:center;text-decoration:none;background:#1565c0;margin-bottom:0">
+            🎁 Mở Báo Quà Tặng Bia Hà Nội
+          </a>
+        </div>
         <div class="subtabs">
           <button id="r_modeOpen" class="active" onclick="setReportMode('open')">Tồn đầu</button>
           <button id="r_modeClose" onclick="setReportMode('close')">Tồn cuối</button>
@@ -356,6 +364,10 @@ details.fold[open] > summary { margin-bottom:8px; }
 
     <div class="grp-sec">📝 Báo cáo Checkin</div>
     <label class="sw"><input type="checkbox" id="a_showName" onchange="adminToggleNameRow()"> <span>Hiện ô Họ tên &amp; Khu vực</span></label>
+
+    <div class="grp-sec">🎁 Link Báo Quà Tặng</div>
+    <label class="sw"><input type="checkbox" id="a_supLink" onchange="adminSaveSupLink()"> <span>Hiện nút link Báo Quà Tặng cho Sup</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở link Báo Quà Tặng trong tab Báo cáo. Admin luôn thấy.</div>
 
     <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
@@ -868,6 +880,12 @@ function confirmAddModal() {
 
 /* ===== ẨN / HIỆN NÚT "KPI BÁN HÀNG" (admin bật tắt, lưu trên server) ===== */
 var salesEnabled = true;
+var supLinkVisible = false;
+function applySupLink() {
+  var show = isAdmin || myRole === 'admin' || (myRole === 'sup' && supLinkVisible);
+  var el = document.getElementById('supLinkBtn');
+  if (el) el.style.display = show ? '' : 'none';
+}
 function applySalesNav() {
   var show = salesEnabled || isAdmin || myRole === 'admin';
   document.getElementById('navSales').style.display = show ? '' : 'none';
@@ -1244,6 +1262,10 @@ function setStockBundle(b, date) {
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
 
   // Phạm vi xem dữ liệu do admin bật/tắt: đổi thì tải lại dữ liệu đang hiển thị
+  if (b.supLinkVisible !== undefined) {
+    supLinkVisible = !!b.supLinkVisible;
+    applySupLink();
+  }
   if (b.viewOwnOnly !== undefined || b.supOwnOnly !== undefined) {
     var nv = !!b.viewOwnOnly, ns = !!b.supOwnOnly;
     var changed = _scopeInit && (nv !== viewOwnOnly || ns !== supOwnOnly);
@@ -1978,6 +2000,7 @@ function setAdmin(on, token) {
   stockOverviewDate = '';
   salesUsedDate = '';
   applySalesNav();
+  applySupLink();
   applyNavLock();
   renderStockProductSelect();
   refreshStockMode();
@@ -2068,6 +2091,7 @@ function verifyOtp() {
 function openAdminPanel() {
   document.getElementById('a_delay').value = Math.round(CLOSE_DELAY_MS / 60000);
   document.getElementById('a_showName').checked = (lsGet('showNameRow') === '1');
+  document.getElementById('a_supLink').checked = supLinkVisible;
   document.getElementById('a_salesVisible').checked = salesEnabled;
   document.getElementById('a_viewOwn').checked = viewOwnOnly;
   document.getElementById('a_supOwn').checked = supOwnOnly;
@@ -2152,6 +2176,22 @@ function adminSyncOne(el) {
 function applyNameRow() {
   var row = document.getElementById('r_nameRow');
   if (row) row.style.display = (lsGet('showNameRow') === '1') ? '' : 'none';
+}
+function adminSaveSupLink() {
+  var on = document.getElementById('a_supLink').checked;
+  var restore = function() { document.getElementById('a_supLink').checked = supLinkVisible; };
+  var apply = function(v) {
+    supLinkVisible = v; applySupLink();
+    showToast(v ? 'Sup đã thấy nút link Báo Quà Tặng.' : 'Đã ẩn nút link với Sup.', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetSupLinkVisible(on, adminToken);
 }
 function adminToggleNameRow() {
   lsSet('showNameRow', document.getElementById('a_showName').checked ? '1' : '0');
