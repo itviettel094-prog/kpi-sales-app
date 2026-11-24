@@ -41,22 +41,43 @@ class MyFirebaseService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val sp = getSharedPreferences("session", MODE_PRIVATE); val count = sp.getInt("unread", 0) + 1; sp.edit().putInt("unread", count).apply(); val n = NotificationCompat.Builder(this, channel)
+        val sp = getSharedPreferences("session", MODE_PRIVATE)
+        val unread = sp.getInt("unread", 0) + 1
+
+        val oldLines = (sp.getString("notif_lines", "") ?: "")
+            .split("\u0001").filter { it.isNotBlank() }.toMutableList()
+        oldLines.add(body)
+        while (oldLines.size > 5) oldLines.removeAt(0)
+
+        sp.edit()
+            .putInt("unread", unread)
+            .putString("notif_lines", oldLines.joinToString("\u0001"))
+            .apply()
+
+        val inbox = NotificationCompat.InboxStyle()
+            .setBigContentTitle("$title ($unread tin nhắn)")
+        for (line in oldLines) inbox.addLine(line)
+
+        val n = NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)   // nên thay bằng icon riêng (trắng, nền trong suốt)
             .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentText("($unread tin nhắn) " + oldLines.lastOrNull().orEmpty())
+            .setStyle(inbox)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setSound(PushChannels.soundUri(this, raw))            // Android < 8 (>= 8 dùng âm của kênh)
             .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
             .setAutoCancel(true)
-            .setNumber(count)
+            .setNumber(unread)
             .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
             .setContentIntent(pi)
             .build()
 
-        NotificationManagerCompat.from(this).notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), n)
+        NotificationManagerCompat.from(this).notify(NOTIF_ID, n)
+    }
+
+    companion object {
+        private const val NOTIF_ID = 2001
     }
 }
