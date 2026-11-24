@@ -379,7 +379,12 @@
     <div class="grp-sec">👥 Nhân viên online / offline</div>
     <button class="btn-secondary btn-add-line" onclick="loadPresence()">🔄 Làm mới</button>
     <div id="a_presence"></div>
-
+<div class="grp-sec">🔗 Kiểm tra đồng bộ "Nhập sản lượng"</div>
+    <div class="row row-ds">
+      <div class="input-group"><input type="date" id="a_syncDate"></div>
+      <div class="input-group"><button class="btn-secondary" style="padding:9px" onclick="adminCheckSync()">Kiểm tra</button></div>
+    </div>
+    <div id="a_syncList"></div>
     <div class="grp-sec">🏬 Cửa hàng</div>
     <div id="a_storeList"></div>
     <button class="btn-secondary btn-add-line" onclick="adminAddCat('store')">➕ Thêm cửa hàng</button>
@@ -2047,6 +2052,7 @@ function openAdminPanel() {
   document.getElementById('a_salesVisible').checked = salesEnabled;
   document.getElementById('a_viewOwn').checked = viewOwnOnly;
   document.getElementById('a_supOwn').checked = supOwnOnly;
+  document.getElementById('a_syncDate').value = todayStr();
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
@@ -2089,7 +2095,41 @@ function loadPresence() {
     .withFailureHandler(function(err) { box.innerHTML = '<div class="msg error">' + escHtml(err.message) + '</div>'; })
     .getPresence();
 }
-
+function adminCheckSync() {
+  var box = document.getElementById('a_syncList');
+  var d = document.getElementById('a_syncDate').value || todayStr();
+  document.getElementById('a_syncDate').value = d;
+  if (!hasServer()) { box.innerHTML = '<div class="hint">(Demo)</div>'; return; }
+  box.innerHTML = '<div class="hint">⏳ Đang kiểm tra...</div>';
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) { box.innerHTML = '<div class="msg error">' + escHtml((res && res.error) || 'Lỗi') + '</div>'; return; }
+      if (!res.list.length) { box.innerHTML = '<div class="hint">Ngày này chưa có dữ liệu bán hàng.</div>'; return; }
+      box.innerHTML = res.list.map(function(x) {
+        var st = x.synced
+          ? '<span style="color:#1e7e34;font-weight:800">✅ Đã đồng bộ, dòng ' + x.row + '</span> <a href="' + escHtml(x.url) + '" target="_blank" rel="noopener">🔗 Mở dòng</a>'
+          : '<span style="color:#dc3545;font-weight:800">❌ Chưa đồng bộ</span> <button class="edit-link" data-st="' + escHtml(x.store) + '" onclick="adminSyncOne(this)">Đồng bộ</button>'
+            + (x.error ? '<br><span style="color:#dc3545">' + escHtml(x.error) + '</span>' : '');
+        return '<div class="cat-row" style="display:block"><div style="font-weight:800">' + escHtml(x.store) + '</div>'
+          + '<div style="font-size:.68rem;color:#666">' + escHtml(x.items.join(' | ')) + '</div>'
+          + '<div style="font-size:.72rem;margin-top:2px">' + st + '</div></div>';
+      }).join('');
+    })
+    .withFailureHandler(function(err) { box.innerHTML = '<div class="msg error">' + escHtml(err.message) + '</div>'; })
+    .adminGetSyncStatus(d, adminToken);
+}
+function adminSyncOne(el) {
+  var st = el.getAttribute('data-st'), d = document.getElementById('a_syncDate').value;
+  if (!confirm('Đồng bộ "' + st + '" ngày ' + d + ' sang Nhập sản lượng?')) return;
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) showToast('Đã đồng bộ, dòng ' + res.row + '.', 'success');
+      else showToast((res && res.error) || 'Lỗi đồng bộ', 'error');
+      adminCheckSync();
+    })
+    .withFailureHandler(adminFail)
+    .adminSyncStore(d, st, adminToken);
+}
 function applyNameRow() {
   var row = document.getElementById('r_nameRow');
   if (row) row.style.display = (lsGet('showNameRow') === '1') ? '' : 'none';
