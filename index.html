@@ -284,6 +284,13 @@ details.fold[open] > summary { margin-bottom:8px; }
       <!-- VIEW: REPORT (báo cáo checkin để copy) -->
       <div class="view" id="view-report" style="display:none">
         <div class="section-title">Báo Cáo Checkin</div>
+        <div id="supSlideBtn" style="display:none;margin-bottom:10px">
+          <a href="https://itviettel094-prog.github.io/slideanhnghiemthu/" target="_blank" rel="noopener"
+             class="btn-submit"
+             style="display:block;text-align:center;text-decoration:none;background:#6a1b9a;margin-bottom:0">
+            🖼️ Slide ảnh nghiệm thu
+          </a>
+        </div>
         <div id="supLinkBtn" style="display:none;margin-bottom:10px">
           <a href="https://itviettel094-prog.github.io/BaoQuaTangBiaHaBeCo/"
              target="_blank" rel="noopener"
@@ -368,6 +375,17 @@ details.fold[open] > summary { margin-bottom:8px; }
     <div class="grp-sec">🎁 Link Báo Quà Tặng</div>
     <label class="sw"><input type="checkbox" id="a_supLink" onchange="adminSaveSupLink()"> <span>Hiện nút link Báo Quà Tặng cho Sup</span></label>
     <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở link Báo Quà Tặng trong tab Báo cáo. Admin luôn thấy.</div>
+
+    <div class="grp-sec">🖼️ Slide ảnh nghiệm thu</div>
+    <label class="sw"><input type="checkbox" id="a_supSlide" onchange="adminSaveSupSlide()"> <span>Hiện nút Slide ảnh nghiệm thu cho Sup</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở Slide ảnh nghiệm thu trong tab Báo cáo. Admin luôn thấy.</div>
+    <div style="margin-bottom:8px">
+      <a href="https://itviettel094-prog.github.io/slideanhnghiemthu/" target="_blank" rel="noopener"
+         class="btn-submit"
+         style="display:block;text-align:center;text-decoration:none;background:#6a1b9a;margin-bottom:0">
+        🖼️ Mở Slide ảnh nghiệm thu
+      </a>
+    </div>
 
     <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
@@ -604,6 +622,7 @@ function updateRoleUi() {
   if (myRole === 'sup' && supOwnOnly) note = '👁️ Bạn chỉ xem được điểm bán / PG thuộc Sup ' + (mySupName || 'của bạn') + '.';
   else if (myRole === 'staff' && viewOwnOnly) note = '👁️ Bạn chỉ xem được dữ liệu do chính bạn nhập.';
   info.textContent = note;
+  applySupSlide();
 }
 
 /* ===== LOAD DỮ LIỆU BAN ĐẦU (chỉ 1 lần gọi server) ===== */
@@ -880,6 +899,28 @@ function confirmAddModal() {
 
 /* ===== ẨN / HIỆN NÚT "KPI BÁN HÀNG" (admin bật tắt, lưu trên server) ===== */
 var salesEnabled = true;
+var supSlideVisible = false;
+function applySupSlide() {
+  var show = isAdmin || myRole === 'admin' || (myRole === 'sup' && supSlideVisible);
+  var el = document.getElementById('supSlideBtn');
+  if (el) el.style.display = show ? '' : 'none';
+}
+function adminSaveSupSlide() {
+  var on = document.getElementById('a_supSlide').checked;
+  var restore = function() { document.getElementById('a_supSlide').checked = supSlideVisible; };
+  var apply = function(v) {
+    supSlideVisible = !!v; applySupSlide();
+    showToast(v ? 'Sup đã thấy nút Slide ảnh nghiệm thu.' : 'Đã ẩn nút Slide ảnh nghiệm thu với Sup.', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetSupSlideVisible(on, adminToken);
+}
 var supLinkVisible = false;
 function applySupLink() {
   var show = isAdmin || myRole === 'admin' || (myRole === 'sup' && supLinkVisible);
@@ -1258,6 +1299,7 @@ function setStockBundle(b, date) {
   if (b.role) myRole = b.role;
   if (b.supName !== undefined) mySupName = b.supName || '';
   if (b.salesEnabled !== undefined) { salesEnabled = !!b.salesEnabled; }
+  if (b.supSlideVisible !== undefined) { supSlideVisible = !!b.supSlideVisible; }
   applySalesNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
 
@@ -2096,6 +2138,7 @@ function openAdminPanel() {
   document.getElementById('a_viewOwn').checked = viewOwnOnly;
   document.getElementById('a_supOwn').checked = supOwnOnly;
   document.getElementById('a_syncDate').value = todayStr();
+  document.getElementById('a_supSlide').checked = supSlideVisible;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
