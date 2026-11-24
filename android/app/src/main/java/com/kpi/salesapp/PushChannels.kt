@@ -9,8 +9,31 @@ import android.net.Uri
 import android.os.Build
 
 object PushChannels {
-    const val OPEN = "sup_open_v1"
-    const val CLOSE = "sup_close_v1"
+    const val OPEN = "sup_open_v2"
+    const val CLOSE = "sup_close_v2"
+
+    private var player: android.media.MediaPlayer? = null
+
+    // Tự phát âm thanh bằng MediaPlayer: kêu hết file, không bị chạm màn hình cắt ngang
+    fun play(ctx: Context, raw: Int) {
+        try {
+            player?.release()
+            player = null
+            val afd = ctx.resources.openRawResourceFd(raw)
+            val p = android.media.MediaPlayer()
+            p.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+            )
+            p.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            afd.close()
+            p.setOnCompletionListener { it.release(); if (player === it) player = null }
+            p.prepare()
+            p.start()
+            player = p
+        } catch (e: Exception) { }
+    }
 
     fun soundUri(ctx: Context, raw: Int): Uri =
         Uri.parse("android.resource://${ctx.packageName}/$raw")
@@ -25,11 +48,13 @@ object PushChannels {
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
         fun ch(id: String, name: String, raw: Int) {
             val c = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
-            c.setSound(soundUri(ctx, raw), attr)
+            c.setSound(null, null)   // im lặng: âm thanh do app tự phát bằng MediaPlayer
             c.enableVibration(true)
             c.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             nm.createNotificationChannel(c)
         }
+        nm.deleteNotificationChannel("sup_open_v1")
+        nm.deleteNotificationChannel("sup_close_v1")
         ch(OPEN, "Báo cáo tồn đầu ca", R.raw.sup_ton_dau_ca)
         ch(CLOSE, "Báo cáo tồn cuối ca", R.raw.sup_ton_cuoi)
     }
