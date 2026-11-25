@@ -151,7 +151,8 @@ class MainActivity : AppCompatActivity() {
         googleClient = GoogleSignIn.getClient(this, gso)
 
         webView = WebView(this)
-        webView.fitsSystemWindows = true         webView.keepScreenOn = true   // giữ màn hình sáng khi đang mở app
+        webView.fitsSystemWindows = true
+        webView.keepScreenOn = true   // giữ màn hình sáng khi đang mở app
         setContentView(webView)
 
         webView.settings.javaScriptEnabled = true
