@@ -270,6 +270,12 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 lifecycleScope.launch {
                     val token = freshToken()
+                    if (token == null) {
+                        Toast.makeText(this@MainActivity, "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Toast.LENGTH_LONG).show()
+                        SessionManager.clear(this@MainActivity)
+                        goLogin()
+                        return@launch
+                    }
                     val res: JSONObject = try {
                         ApiClient.call(execUrl, action, token, JSONObject(paramsJson))
                     } catch (e: Exception) {
@@ -290,20 +296,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ID token Google chỉ sống ~1 giờ nên tự làm mới ngầm khi đã cũ
-    private suspend fun freshToken(): String {
+    private suspend fun freshToken(): String? {
         val now = System.currentTimeMillis()
         if (idToken.isNotEmpty() && now - tokenTime < 40 * 60 * 1000L) return idToken
-        val t = suspendCancellableCoroutine<String?> { cont ->
-            googleClient.silentSignIn()
-                .addOnSuccessListener { acc -> cont.resume(acc.idToken) }
-                .addOnFailureListener { cont.resume(null) }
+
+        var needReauth = false
+        var gotToken: String? = null
+
+        for (attempt in 1..3) {
+            val result = suspendCancellableCoroutine<Result<String>> { cont ->
+                googleClient.silentSignIn()
+                    .addOnSuccessListener { acc ->
+                        val t = acc.idToken
+                        if (t != null) cont.resume(Result.success(t))
+                        else cont.resume(Result.failure(Exception("idToken null")))
+                    }
+                    .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
+            }
+
+            result.onSuccess { t ->
+                gotToken = t
+            }.onFailure { e ->
+                val code = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+                if (code == com.google.android.gms.common.api.CommonStatusCodes.SIGN_IN_REQUIRED) {
+                    needReauth = true
+                }
+            }
+
+            if (gotToken != null) break
+            if (needReauth) break
+            if (attempt < 3) delay(1500L * attempt)
         }
-        if (t != null) {
-            idToken = t
+
+        if (gotToken != null) {
+            idToken = gotToken!!
             tokenTime = now
-            SessionManager.saveLogin(this, t, SessionManager.getEmail(this) ?: "")
+            SessionManager.saveLogin(this, gotToken!!, SessionManager.getEmail(this) ?: "")
+            return gotToken
         }
-        return idToken
+
+        return if (needReauth) null else idToken.ifEmpty { null }
     }
 
         // ===== ONLINE + VỊ TRÍ =====
