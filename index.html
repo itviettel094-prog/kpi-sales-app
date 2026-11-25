@@ -2198,7 +2198,7 @@ function adminCheckSync() {
           ? '<span style="color:#1e7e34;font-weight:800">✅ Đã đồng bộ, dòng ' + x.row + '</span> <a href="' + escHtml(x.url) + '" target="_blank" rel="noopener">🔗 Mở dòng</a>'
           : '<span style="color:#dc3545;font-weight:800">❌ Chưa đồng bộ</span> <button class="edit-link" data-st="' + escHtml(x.store) + '" onclick="adminSyncOne(this)">Đồng bộ</button>'
             + (x.error ? '<br><span style="color:#dc3545">' + escHtml(x.error) + '</span>' : '');
-        return '<div class="cat-row" style="display:block"><div style="font-weight:800">' + escHtml(x.store) + '</div>'
+        return '<div class="cat-row" style="display:block"><div style="font-weight:800">' + escHtml(x.store) + ' <button class="del-link" data-st="' + escHtml(x.store) + '" onclick="adminDeleteSyncOne(this)">Xoá</button></div>'
           + '<div style="font-size:.68rem;color:#666">' + escHtml(x.items.join(' | ')) + '</div>'
           + '<div style="font-size:.72rem;margin-top:2px">' + st + '</div></div>';
       }).join('');
@@ -2217,6 +2217,20 @@ function adminSyncOne(el) {
     })
     .withFailureHandler(adminFail)
     .adminSyncStore(d, st, adminToken);
+}
+function adminDeleteSyncOne(el) {
+  var st = el.getAttribute('data-st'), d = document.getElementById('a_syncDate').value;
+  if (!confirm('XOÁ dữ liệu bán hàng của "' + st + '" ngày ' + d + '?\n(Xoá ở cả sheet Bán hàng và Nhập sản lượng)')) return;
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        showToast('Đã xoá: Bán hàng ' + res.deletedSales + ' dòng, Nhập sản lượng ' + res.deletedSL + ' dòng.', 'success');
+        salesUsedDate = '';
+        adminCheckSync();
+      } else showToast((res && res.error) || 'Lỗi xoá', 'error');
+    })
+    .withFailureHandler(adminFail)
+    .adminDeleteSync(d, st, adminToken);
 }
 function applyNameRow() {
   var row = document.getElementById('r_nameRow');
