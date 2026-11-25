@@ -4,7 +4,7 @@
   <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quản Lý KPI Bán Hàng</title>
+  <title>Quản Lý KPI Bán Hàng</title>   <link rel="icon" type="image/png" href="favicon.png"> <link rel="apple-touch-icon" href="favicon.png">
   <style>
     body {
       background-color: #f0f2f5;
@@ -382,6 +382,10 @@ details.fold[open] > summary { margin-bottom:8px; }
     <label class="sw"><input type="checkbox" id="a_supOpen" onchange="adminSaveSupOpen()"> <span>Cho Sup nhập Tồn đầu</span></label>
     <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: Sup không còn thấy nút Tồn đầu và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
 
+    <div class="grp-sec">📦 Nhập Tồn cuối với Sup</div>
+    <label class="sw"><input type="checkbox" id="a_supClose" onchange="adminSaveSupClose()"> <span>Cho Sup nhập Tồn cuối</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: Sup không còn thấy nút Tồn cuối và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
+
     <div class="grp-sec">🖼️ Slide ảnh nghiệm thu</div>
     <label class="sw"><input type="checkbox" id="a_supSlide" onchange="adminSaveSupSlide()"> <span>Hiện nút Slide ảnh nghiệm thu cho Sup</span></label>
     <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở Slide ảnh nghiệm thu trong tab Báo cáo. Admin luôn thấy.</div>
@@ -687,7 +691,7 @@ function loadInit() {
 function isMyLocked() { return !isAdmin && myRole !== 'admin' && myLockUntil > 0 && stockNow() < myLockUntil; }
 function applyNavLock() {
   var locked = isMyLocked();
-  document.getElementById('navStock').style.display = locked ? 'none' : '';
+  var supBlocked = !isAdminLike() && myRole === 'sup' && !supOpenEnabled && !supCloseEnabled; document.getElementById('navStock').style.display = (locked || supBlocked) ? 'none' : ''; if (supBlocked && document.getElementById('view-stock').style.display !== 'none') switchView((salesEnabled || isAdmin) ? 'sales' : 'history');
   var info = document.getElementById('lockInfo');
   if (locked) {
     info.textContent = '⏳ Bạn đã nhập Tồn đầu. Nút Tồn đầu/cuối sẽ hiện lại lúc ' + fmtClock(myLockUntil) + '.';
@@ -907,11 +911,29 @@ function confirmAddModal() {
 var salesEnabled = true;
 var supSlideVisible = false;
 var supOpenEnabled = true;
+var supCloseEnabled = true;
+function adminSaveSupClose() {
+  var on = document.getElementById('a_supClose').checked;
+  var restore = function() { document.getElementById('a_supClose').checked = supCloseEnabled; };
+  var apply = function(v) {
+    supCloseEnabled = !!v; renderStockProductSelect(); refreshStockMode(); applyNavLock();
+    showToast(v ? 'Sup đã được nhập Tồn cuối.' : 'Đã TẮT nhập Tồn cuối với Sup.', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetSupCloseEnabled(on, adminToken);
+}
 function adminSaveSupOpen() {
   var on = document.getElementById('a_supOpen').checked;
-  var restore = function() { document.getElementById('a_supOpen').checked = supOpenEnabled; };
+  var restore = function() { document.getElementById('a_supOpen').checked = supOpenEnabled;
+  document.getElementById('a_supClose').checked = supCloseEnabled; };
   var apply = function(v) {
-    supOpenEnabled = !!v; renderStockProductSelect(); refreshStockMode();
+    supOpenEnabled = !!v; renderStockProductSelect(); refreshStockMode(); applyNavLock();
     showToast(v ? 'Sup đã được nhập Tồn đầu.' : 'Đã TẮT nhập Tồn đầu với Sup.', 'success');
   };
   if (!hasServer()) { apply(on); return; }
@@ -1256,6 +1278,7 @@ function stockEligibleRaw(p, mode) {
   var full = stockStatus.full.indexOf(p) !== -1;
   if (mode === 'open' && myRole === 'sup' && !supOpenEnabled && !isAdminLike()) return false;
   if (mode === 'open') return isAdminLike() ? !started : (stockStatus.started.length === 0 && !started);   // nhân viên: cửa hàng đã nhập Tồn đầu hôm nay thì khoá; admin không bị khoá
+  if (mode === 'close' && myRole === 'sup' && !supCloseEnabled && !isAdminLike()) return false;
   return started && !full && (isAdminLike() || stockNow() >= unlockAt(p));
 }
 function stockWaiting() {   // sản phẩm đã có Tồn đầu, chưa đủ thời gian chờ
@@ -1325,6 +1348,7 @@ function setStockBundle(b, date) {
   if (b.salesEnabled !== undefined) { salesEnabled = !!b.salesEnabled; }
   if (b.supSlideVisible !== undefined) { supSlideVisible = !!b.supSlideVisible; }
   if (b.supOpenEnabled !== undefined) { supOpenEnabled = !!b.supOpenEnabled; }
+  if (b.supCloseEnabled !== undefined) { supCloseEnabled = !!b.supCloseEnabled; }
   applySalesNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
 
@@ -1460,6 +1484,7 @@ function refreshStockMode() {
     if (blockedOpen || blockedClose) msg = schedBlockedMsg(blockedOpen, blockedClose);
     else if (waiting.length) msg = '✅ Đã nhập xong <span class="pill pill-open">TỒN ĐẦU</span>. <span class="pill pill-close">TỒN CUỐI</span> sẽ mở lúc <b>' + fmtClock(nextUnlock) + '</b> (sau ' + delayLabel() + ').';
     else if (myRole === 'sup' && !supOpenEnabled && !stockStatus.started.length) msg = '🔒 Admin đang tạm đóng nhập <span class="pill pill-open">TỒN ĐẦU</span> với Sup.';
+    else if (myRole === 'sup' && !supCloseEnabled && stockStatus.started.length && !closeRaw) msg = '🔒 Admin đang tạm đóng nhập <span class="pill pill-close">TỒN CUỐI</span> với Sup.';
     else msg = '✅ Cửa hàng này đã nhập đủ Tồn đầu & Tồn cuối ngày ' + escHtml(date) + '.';
   } else {
     msg = 'Đang nhập ' + pill;
@@ -1486,7 +1511,7 @@ setInterval(function() {
     renderStockProductSelect();
     refreshStockMode();
   }
-  if (_tick % 2 === 0 && date && hasServer() && document.getElementById('view-stock').style.display !== 'none') {
+  if (_tick % 2 === 0 && date && hasServer() && (document.getElementById('view-stock').style.display !== 'none' || myRole === 'sup')) {
     fetchStockBundle(date, function(){ renderStockProductSelect(); refreshStockMode(); });
   }
 }, 30000);
@@ -2166,6 +2191,7 @@ function openAdminPanel() {
   document.getElementById('a_syncDate').value = todayStr();
   document.getElementById('a_supSlide').checked = supSlideVisible;
   document.getElementById('a_supOpen').checked = supOpenEnabled;
+  document.getElementById('a_supClose').checked = supCloseEnabled;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
