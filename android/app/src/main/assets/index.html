@@ -2266,7 +2266,7 @@ function doAdminLogout() {
 }
 function catRow(type, name, i) {
   return '<div class="cat-row"><span>' + escHtml(name) + '</span><span>'
-    + '<button class="edit-link" onclick="adminRenameCat(\'' + type + '\',' + i + ')">Sửa tên</button>'
+    + (type === 'store' ? '<button class="edit-link" onclick="adminEditStoreInfo(' + i + ')">PG</button> ' : '') + '<button class="edit-link" onclick="adminRenameCat(\'' + type + '\',' + i + ')">Sửa tên</button>'
     + '<button class="del-link" onclick="adminDeleteCat(\'' + type + '\',' + i + ')">Xoá</button></span></div>';
 }
 function renderAdminLists() {
@@ -2375,6 +2375,41 @@ function adminDeleteCat(type, i) {
     .adminDeleteCatalog(type, name, adminToken);
 }
 
+/* ===== THÔNG TIN ĐIỂM BÁN (địa chỉ, PG, Sup, khu vực) ===== */
+function adminEditStoreInfo(i) {
+  var st = storesList[i];
+  var x = storeInfo[st] || { addr: '', pgs: [], sup: '', area: '' };
+  editingKind = 'storeinfo'; editingId = st;
+  document.getElementById('editModalTitle').textContent = 'Thông tin: ' + st;
+  document.getElementById('editFields').innerHTML =
+      fld('Địa chỉ', '<input type="text" id="e_addr" value="' + escHtml(x.addr || '') + '">')
+    + fld('Họ tên PG', '<input type="text" id="e_pg1" value="' + escHtml((x.pgs || [])[0] || '') + '">')
+    + fld('Họ tên PG 2 (nếu có)', '<input type="text" id="e_pg2" value="' + escHtml((x.pgs || [])[1] || '') + '">')
+    + fld('Sup phụ trách', '<input type="text" id="e_sup" value="' + escHtml(x.sup || '') + '" placeholder="Phải khớp tên Sup, vd: Trần Thị Dung">')
+    + fld('Khu vực', '<input type="text" id="e_area" value="' + escHtml(x.area || '') + '">');
+  document.getElementById('editModal').classList.add('open');
+}
+function saveStoreInfo() {
+  if (!isAdmin) return;
+  var g = function(id) { return document.getElementById(id).value.trim(); };
+  var st = editingId;
+  var info = { addr: g('e_addr'), pg1: g('e_pg1'), pg2: g('e_pg2'), sup: g('e_sup'), area: g('e_area') };
+  if (!hasServer()) { closeEditModal(); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        var pgs = []; if (info.pg1) pgs.push(info.pg1); if (info.pg2) pgs.push(info.pg2);
+        storeInfo[st] = { addr: info.addr, pgs: pgs, sup: info.sup, area: info.area };
+        _metaKey = '';
+        closeEditModal();
+        renderSupSelects();
+        showToast('Đã lưu thông tin điểm bán.', 'success');
+      } else adminFail((res && res.error) || 'Lỗi');
+    })
+    .withFailureHandler(adminFail)
+    .adminSetStoreInfo(st, info, adminToken);
+}
+
 /* ===== SỬA / XOÁ (admin: sửa được MỌI trường) ===== */
 function optHtml(list, cur) {
   var l = list.slice();
@@ -2412,6 +2447,7 @@ function openEditModal(kind, rowIndex) {
 function closeEditModal() { document.getElementById('editModal').classList.remove('open'); editingId = null; editingKind = null; }
 
 function confirmEdit() {
+  if (editingKind === 'storeinfo') { saveStoreInfo(); return; }
   if (!isAdmin) return;
   var g = function(id){ return document.getElementById(id).value; };
   var date = g('e_date'), store = g('e_store'), product = g('e_product');
