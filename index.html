@@ -2220,11 +2220,11 @@ function adminSyncOne(el) {
 }
 function adminDeleteSyncOne(el) {
   var st = el.getAttribute('data-st'), d = document.getElementById('a_syncDate').value;
-  if (!confirm('XOÁ dữ liệu bán hàng của "' + st + '" ngày ' + d + '?\n(Xoá ở cả sheet Bán hàng và Nhập sản lượng)')) return;
+  if (!confirm('XOÁ dữ liệu bán hàng của "' + st + '" ngày ' + d + '?\n(Xoá ở cả Tồn kho, Bán hàng và Nhập sản lượng)')) return;
   GAS_RUN
     .withSuccessHandler(function(res) {
       if (res && res.ok) {
-        showToast('Đã xoá: Bán hàng ' + res.deletedSales + ' dòng, Nhập sản lượng ' + res.deletedSL + ' dòng.', 'success');
+        showToast('Đã xoá: Tồn kho ' + res.deletedStock + ' dòng, Bán hàng ' + res.deletedSales + ' dòng, Nhập sản lượng ' + res.deletedSL + ' dòng.', 'success');
         salesUsedDate = '';
         adminCheckSync();
       } else showToast((res && res.error) || 'Lỗi xoá', 'error');
