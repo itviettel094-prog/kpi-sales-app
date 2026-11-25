@@ -88,6 +88,7 @@ private const val SHIM_JS = """
     adminSetViewScope:  ['adminSetViewScope', D, function (a) { return { viewOwn: a[0], supOwn: a[1] }; }],
     adminSetSupLinkVisible: ['adminSetSupLinkVisible', D, function (a) { return { on: a[0] }; }],
     adminSetSupSlideVisible: ['adminSetSupSlideVisible', D, function (a) { return { on: a[0] }; }],
+    adminSetSupOpenEnabled: ['adminSetSupOpenEnabled', D, function (a) { return { on: a[0] }; }],
     adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
     adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
     adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }],
