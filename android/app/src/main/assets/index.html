@@ -378,6 +378,10 @@ details.fold[open] > summary { margin-bottom:8px; }
     <label class="sw"><input type="checkbox" id="a_supLink" onchange="adminSaveSupLink()"> <span>Hiện nút link Báo Quà Tặng cho Sup</span></label>
     <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở link Báo Quà Tặng trong tab Báo cáo. Admin luôn thấy.</div>
 
+    <div class="grp-sec">📦 Nhập Tồn đầu với Sup</div>
+    <label class="sw"><input type="checkbox" id="a_supOpen" onchange="adminSaveSupOpen()"> <span>Cho Sup nhập Tồn đầu</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: Sup không còn thấy nút Tồn đầu và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
+
     <div class="grp-sec">🖼️ Slide ảnh nghiệm thu</div>
     <label class="sw"><input type="checkbox" id="a_supSlide" onchange="adminSaveSupSlide()"> <span>Hiện nút Slide ảnh nghiệm thu cho Sup</span></label>
     <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở Slide ảnh nghiệm thu trong tab Báo cáo. Admin luôn thấy.</div>
@@ -902,6 +906,23 @@ function confirmAddModal() {
 /* ===== ẨN / HIỆN NÚT "KPI BÁN HÀNG" (admin bật tắt, lưu trên server) ===== */
 var salesEnabled = true;
 var supSlideVisible = false;
+var supOpenEnabled = true;
+function adminSaveSupOpen() {
+  var on = document.getElementById('a_supOpen').checked;
+  var restore = function() { document.getElementById('a_supOpen').checked = supOpenEnabled; };
+  var apply = function(v) {
+    supOpenEnabled = !!v; renderStockProductSelect(); refreshStockMode();
+    showToast(v ? 'Sup đã được nhập Tồn đầu.' : 'Đã TẮT nhập Tồn đầu với Sup.', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetSupOpenEnabled(on, adminToken);
+}
 function applySupSlide() {
   var show = isAdmin || myRole === 'admin' || (myRole === 'sup' && supSlideVisible);
   var el = document.getElementById('supSlideBtn');
@@ -1233,6 +1254,7 @@ function stockEligible(p, mode) { return windowOk(mode) && stockEligibleRaw(p, m
 function stockEligibleRaw(p, mode) {
   var started = stockStatus.started.indexOf(p) !== -1;
   var full = stockStatus.full.indexOf(p) !== -1;
+  if (mode === 'open' && myRole === 'sup' && !supOpenEnabled && !isAdminLike()) return false;
   if (mode === 'open') return isAdminLike() ? !started : (stockStatus.started.length === 0 && !started);   // nhân viên: cửa hàng đã nhập Tồn đầu hôm nay thì khoá; admin không bị khoá
   return started && !full && (isAdminLike() || stockNow() >= unlockAt(p));
 }
@@ -1302,6 +1324,7 @@ function setStockBundle(b, date) {
   if (b.supName !== undefined) mySupName = b.supName || '';
   if (b.salesEnabled !== undefined) { salesEnabled = !!b.salesEnabled; }
   if (b.supSlideVisible !== undefined) { supSlideVisible = !!b.supSlideVisible; }
+  if (b.supOpenEnabled !== undefined) { supOpenEnabled = !!b.supOpenEnabled; }
   applySalesNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
 
@@ -1436,6 +1459,7 @@ function refreshStockMode() {
   if (!showOpen && !showClose) {
     if (blockedOpen || blockedClose) msg = schedBlockedMsg(blockedOpen, blockedClose);
     else if (waiting.length) msg = '✅ Đã nhập xong <span class="pill pill-open">TỒN ĐẦU</span>. <span class="pill pill-close">TỒN CUỐI</span> sẽ mở lúc <b>' + fmtClock(nextUnlock) + '</b> (sau ' + delayLabel() + ').';
+    else if (myRole === 'sup' && !supOpenEnabled && !stockStatus.started.length) msg = '🔒 Admin đang tạm đóng nhập <span class="pill pill-open">TỒN ĐẦU</span> với Sup.';
     else msg = '✅ Cửa hàng này đã nhập đủ Tồn đầu & Tồn cuối ngày ' + escHtml(date) + '.';
   } else {
     msg = 'Đang nhập ' + pill;
@@ -2141,6 +2165,7 @@ function openAdminPanel() {
   document.getElementById('a_supOwn').checked = supOwnOnly;
   document.getElementById('a_syncDate').value = todayStr();
   document.getElementById('a_supSlide').checked = supSlideVisible;
+  document.getElementById('a_supOpen').checked = supOpenEnabled;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
