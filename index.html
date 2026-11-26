@@ -400,6 +400,10 @@ details.fold[open] > summary { margin-bottom:8px; }
     <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
 
+    <div class="grp-sec">📊 Nút "Báo cáo"</div>
+    <label class="sw"><input type="checkbox" id="a_reportVisible" onchange="adminSaveReportVisible()"> <span>Hiện nút Báo cáo cho nhân viên (PG)</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: nút "4️⃣ Báo cáo" sẽ ẩn hẳn với nhân viên (PG). Sup và Admin luôn thấy.</div>
+
     <div class="grp-sec">⏱️ Thời gian chờ nhập Tồn cuối (phút)</div>
     <div class="row row-ds">
       <div class="input-group"><input type="number" id="a_delay" min="0" max="1440"></div>
@@ -676,6 +680,7 @@ function loadInit() {
       mySupName = d.supName || '';
       if (d.adminEmails && d.adminEmails.length) adminEmails = d.adminEmails;
       salesUsedMap = d.salesUsed || {}; salesUsedDate = today;
+      if (d.reportVisibleToStaff !== undefined) reportVisibleToStaff = !!d.reportVisibleToStaff;
       setStockBundle(d.stock, today);
       stockStatusLoaded = true;
       updateRoleUi();
@@ -912,6 +917,7 @@ var salesEnabled = true;
 var supSlideVisible = false;
 var supOpenEnabled = true;
 var supCloseEnabled = true;
+var reportVisibleToStaff = true;
 function adminSaveSupClose() {
   var on = document.getElementById('a_supClose').checked;
   var restore = function() { document.getElementById('a_supClose').checked = supCloseEnabled; };
@@ -979,6 +985,13 @@ function applySalesNav() {
     switchView(isMyLocked() ? 'history' : 'stock');
   }
 }
+function applyReportNav() {
+  var show = isAdmin || myRole === 'admin' || myRole === 'sup' || reportVisibleToStaff;
+  document.getElementById('navReport').style.display = show ? '' : 'none';
+  if (!show && document.getElementById('view-report').style.display !== 'none') {
+    switchView('stock');
+  }
+}
 function adminSaveSalesVisible() {
   var on = document.getElementById('a_salesVisible').checked;
   var apply = function(v) {
@@ -993,6 +1006,22 @@ function adminSaveSalesVisible() {
     })
     .withFailureHandler(function(err) { document.getElementById('a_salesVisible').checked = salesEnabled; adminFail(err); })
     .adminSetSalesEnabled(on, adminToken);
+}
+function adminSaveReportVisible() {
+  var on = document.getElementById('a_reportVisible').checked;
+  var restore = function() { document.getElementById('a_reportVisible').checked = reportVisibleToStaff; };
+  var apply = function(v) {
+    reportVisibleToStaff = !!v; applyReportNav();
+    showToast(v ? 'Nhân viên đã thấy nút Báo cáo.' : 'Đã ẨN nút Báo cáo với nhân viên (PG).', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetReportVisibleToStaff(on, adminToken);
 }
 
 /* ===== PHÂN QUYỀN XEM DỮ LIỆU (admin bật / tắt) ===== */
@@ -1349,7 +1378,9 @@ function setStockBundle(b, date) {
   if (b.supSlideVisible !== undefined) { supSlideVisible = !!b.supSlideVisible; }
   if (b.supOpenEnabled !== undefined) { supOpenEnabled = !!b.supOpenEnabled; }
   if (b.supCloseEnabled !== undefined) { supCloseEnabled = !!b.supCloseEnabled; }
+  if (b.reportVisibleToStaff !== undefined) { reportVisibleToStaff = !!b.reportVisibleToStaff; }
   applySalesNav();
+  applyReportNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
 
   // Phạm vi xem dữ liệu do admin bật/tắt: đổi thì tải lại dữ liệu đang hiển thị
@@ -2098,6 +2129,7 @@ function setAdmin(on, token) {
   stockOverviewDate = '';
   salesUsedDate = '';
   applySalesNav();
+  applyReportNav();
   applySupLink();
   applyNavLock();
   renderStockProductSelect();
@@ -2197,6 +2229,7 @@ function openAdminPanel() {
   document.getElementById('a_supSlide').checked = supSlideVisible;
   document.getElementById('a_supOpen').checked = supOpenEnabled;
   document.getElementById('a_supClose').checked = supCloseEnabled;
+  document.getElementById('a_reportVisible').checked = reportVisibleToStaff;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
