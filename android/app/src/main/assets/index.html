@@ -321,7 +321,11 @@ details.fold[open] > summary { margin-bottom:8px; }
         <div id="r_meta"></div>
         <div id="r_warn"></div><div id="r_off"></div>
         <textarea id="r_text" rows="16" readonly></textarea>
-        <button class="btn-submit" onclick="copyReport()">📋 Copy báo cáo</button>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn-submit" style="margin-top:0;flex:1" onclick="copyReport()">📋 Copy báo cáo</button>
+          <button class="btn-submit" style="margin-top:0;flex:1;background:#0068ff" onclick="shareZalo()">💬 Gửi Zalo</button>
+        </div>
+
         <button class="btn-secondary btn-add-line" style="margin-top:8px;margin-bottom:0" onclick="loadReport()">🔄 Tải lại dữ liệu</button>
         <div id="r_admin" style="margin-top:12px"></div>
       </div>
@@ -2276,6 +2280,16 @@ function renderReportAdmin() {
     + '</tbody></table></div>';
 }
 
+function shareZalo() {
+  var txt = document.getElementById('r_text').value;
+  if (!txt || txt.indexOf('Đang tải') !== -1) { showToast('Chưa có báo cáo để chia sẻ.', 'error', 2500, 'center'); return; }
+  if (window.AndroidBridge && typeof AndroidBridge.shareToZalo === 'function') {
+    try { AndroidBridge.shareToZalo(txt); return; } catch (e) {}
+  }
+  if (navigator.share) { navigator.share({ text: txt }).catch(function() {}); return; }
+  copyReport();
+  setTimeout(function() { window.open('https://chat.zalo.me/', '_blank'); }, 600);
+}
 function copyReport() {
   var ta = document.getElementById('r_text');
   if (!ta.value || ta.value.indexOf('Đang tải') !== -1) { showToast('Chưa có báo cáo để copy.', 'error', 2500, 'center'); return; }
