@@ -238,6 +238,20 @@ class MainActivity : AppCompatActivity() {
 
     inner class Bridge {
         @JavascriptInterface
+        fun shareToZalo(text: String) {
+            runOnUiThread {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                try {
+                    startActivity(Intent(send).setPackage("com.zing.zalo"))
+                } catch (e: Exception) {
+                    try { startActivity(Intent.createChooser(send, "Chia sẻ báo cáo")) } catch (e2: Exception) { }
+                }
+            }
+        }
+        @JavascriptInterface
         fun playNativeSound(name: String) {
             runOnUiThread {
                 val assetPath = when (name) {
