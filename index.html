@@ -397,6 +397,10 @@ details.fold[open] > summary { margin-bottom:8px; }
       </a>
     </div>
 
+    <div class="grp-sec">📋 Báo cáo Tồn cuối</div>
+    <label class="sw"><input type="checkbox" id="a_showTonDau" onchange="adminSaveShowTonDauInClose()"> <span>Hiện Tồn đầu ca trong báo cáo Tồn cuối</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: mỗi điểm bán trong báo cáo Checkout sẽ có thêm dòng "Báo cáo tồn đầu ca" trước "Báo cáo số bán trong ca".</div>
+
     <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
 
@@ -742,6 +746,20 @@ function storesOfSup(sup, strict) {
     return s === normSup(sup) || (!strict && !s);
   });
 }
+// Khi xem "Tất cả Sup": gom các điểm bán của từng Sup đứng liền nhau (theo thứ tự Sup A -> B -> ...),
+// điểm bán chưa gán Sup xếp cuối cùng.
+function orderedAllStores() {
+  var used = {}, result = [];
+  allSups().forEach(function(sup) {
+    storesOfSup(sup, true).forEach(function(st) {
+      if (!used[st]) { used[st] = true; result.push(st); }
+    });
+  });
+  storesList.forEach(function(st) {
+    if (!used[st]) { used[st] = true; result.push(st); }
+  });
+  return result;
+}
 function storesForEntry() {
   var k = document.getElementById('k_sup');
   return storesOfSup(k ? k.value : '', false);
@@ -918,6 +936,7 @@ var supSlideVisible = false;
 var supOpenEnabled = true;
 var supCloseEnabled = true;
 var reportVisibleToStaff = true;
+var showTonDauInClose = false;
 function adminSaveSupClose() {
   var on = document.getElementById('a_supClose').checked;
   var restore = function() { document.getElementById('a_supClose').checked = supCloseEnabled; };
@@ -1022,6 +1041,23 @@ function adminSaveReportVisible() {
     })
     .withFailureHandler(function(err) { restore(); adminFail(err); })
     .adminSetReportVisibleToStaff(on, adminToken);
+}
+
+function adminSaveShowTonDauInClose() {
+  var on = document.getElementById('a_showTonDau').checked;
+  var restore = function() { document.getElementById('a_showTonDau').checked = showTonDauInClose; };
+  var apply = function(v) {
+    showTonDauInClose = !!v; buildReport();
+    showToast(v ? 'Đã hiện Tồn đầu trong báo cáo Tồn cuối.' : 'Đã ẩn Tồn đầu trong báo cáo Tồn cuối.', 'success');
+  };
+  if (!hasServer()) { apply(on); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) apply(res.on);
+      else { restore(); adminFail((res && res.error) || 'Lỗi'); }
+    })
+    .withFailureHandler(function(err) { restore(); adminFail(err); })
+    .adminSetShowTonDauInClose(on, adminToken);
 }
 
 /* ===== PHÂN QUYỀN XEM DỮ LIỆU (admin bật / tắt) ===== */
@@ -1379,6 +1415,7 @@ function setStockBundle(b, date) {
   if (b.supOpenEnabled !== undefined) { supOpenEnabled = !!b.supOpenEnabled; }
   if (b.supCloseEnabled !== undefined) { supCloseEnabled = !!b.supCloseEnabled; }
   if (b.reportVisibleToStaff !== undefined) { reportVisibleToStaff = !!b.reportVisibleToStaff; }
+  if (b.showTonDauInClose !== undefined) { showTonDauInClose = !!b.showTonDauInClose; }
   applySalesNav();
   applyReportNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
@@ -1877,6 +1914,8 @@ function onPgChoice(el) {
   buildReport();
 }
 function shiftGet(st) {
+  var info = storeInfo[st] || {};
+  if (info.shiftFrom && info.shiftTo) return { from: info.shiftFrom, to: info.shiftTo };
   var m = {};
   try { m = JSON.parse(localStorage.getItem('shiftChoice') || '{}'); } catch (e) {}
   var s = m[st] || {};
@@ -1886,13 +1925,32 @@ function shiftGet(st) {
   };
 }
 function onShiftChange(el) {
+  var st = el.getAttribute('data-st');
+  var f = el.getAttribute('data-f');
+  var cur = shiftGet(st);
+  var from = (f === 'from') ? el.value : cur.from;
+  var to = (f === 'to') ? el.value : cur.to;
+
+  // Cập nhật ngay trên máy để hiện liền, không cần chờ server trả lời
+  storeInfo[st] = storeInfo[st] || {};
+  storeInfo[st].shiftFrom = from;
+  storeInfo[st].shiftTo = to;
+
   var m = {};
   try { m = JSON.parse(localStorage.getItem('shiftChoice') || '{}'); } catch (e) {}
-  var st = el.getAttribute('data-st');
   m[st] = m[st] || {};
-  m[st][el.getAttribute('data-f')] = el.value;
+  m[st][f] = el.value;
   try { localStorage.setItem('shiftChoice', JSON.stringify(m)); } catch (e) {}
+
   buildReport();
+
+  // Lưu lên server để mọi người cùng thấy giờ ca này, không bị "trôi" khi đổi máy
+  if (hasServer() && from && to) {
+    GAS_RUN
+      .withSuccessHandler(function() {})
+      .withFailureHandler(function() {})
+      .saveShiftTime(st, from, to);
+  }
 }
 var _foldOpen = {};
 function onFoldToggle(el) { _foldOpen[el.getAttribute('data-f')] = el.open; }
@@ -1953,6 +2011,14 @@ function onOffToggle(el) {
   try { localStorage.setItem('reportOff', JSON.stringify(m)); } catch (e) {}
   buildReport();
 }
+function getOffReasonMap() { try { return JSON.parse(localStorage.getItem('reportOffReason') || '{}'); } catch (e) { return {}; } }
+function onOffReasonChange(el) {
+  var m = getOffReasonMap(), k = el.getAttribute('data-k');
+  var v = el.value.trim();
+  if (v) m[k] = v; else delete m[k];
+  try { localStorage.setItem('reportOffReason', JSON.stringify(m)); } catch (e) {}
+  buildReport();
+}
 var _offKey = '';
 function renderReportOff(missing, date) {
   var box = document.getElementById('r_off');
@@ -1962,11 +2028,13 @@ function renderReportOff(missing, date) {
   _offKey = key;
   if (!missing.length) { box.innerHTML = ''; return; }
   var m = getOffMap();
+  var rm = getOffReasonMap();
   box.innerHTML = '<details class="sch-box fold" data-f="off"' + (_foldOpen['off'] ? ' open' : '') + ' ontoggle="onFoldToggle(this)"><summary class="grp-sec" style="margin:0">⚠️ Điểm bán chưa nhập (' + missing.length + ')</summary><div>'
-    + '<div class="hint" style="text-align:left;margin-bottom:6px">Tick <b>OFF</b> nếu điểm bán nghỉ / không hoạt động. Không tick = ghi "CHƯA NHẬP".</div>'
+    + '<div class="hint" style="text-align:left;margin-bottom:6px">Tick <b>OFF</b> nếu điểm bán nghỉ / không hoạt động. Có thể nhập lý do (vd: chuyển ca từ 15:00 đến 20:00 do cửa hàng bận, đã báo nhóm và sale). Không tick = ghi "CHƯA NHẬP".</div>'
     + missing.map(function(st) {
         var k = date + '|' + st;
-        return '<label class="sw"><input type="checkbox" data-k="' + escHtml(k) + '"' + (m[k] ? ' checked' : '') + ' onchange="onOffToggle(this)"> <span>' + escHtml(st) + ' — OFF</span></label>';
+        return '<label class="sw"><input type="checkbox" data-k="' + escHtml(k) + '"' + (m[k] ? ' checked' : '') + ' onchange="onOffToggle(this)"> <span>' + escHtml(st) + ' — OFF</span></label>'
+          + '<div class="input-group" style="margin:-4px 0 10px"><input type="text" data-k="' + escHtml(k) + '" value="' + escHtml(rm[k] || '') + '" placeholder="Lý do OFF (chỉ áp dụng nếu đã tick OFF ở trên)" oninput="onOffReasonChange(this)"></div>';
       }).join('')
     + '</div></details>';
 }
@@ -1989,7 +2057,7 @@ function buildReport() {
   });
   // Lọc theo Sup đang chọn: chỉ giữ các điểm bán thuộc Sup đó
   var supSel = document.getElementById('r_sup').value;
-  var supStores = storesOfSup(supSel, true);
+  var supStores = supSel ? storesOfSup(supSel, true) : orderedAllStores();
   if (supSel) stores = stores.filter(function(st){ return supStores.indexOf(st) !== -1; });
   updateReportStoreSelect(stores);
   var shown = reportStore === '__all__' ? stores : stores.filter(function(st){ return st === reportStore; });
@@ -2004,7 +2072,7 @@ function buildReport() {
   });
   var total = isClose
     ? supStores.filter(function(st){ return openedMapEarly[st] && !offMapEarly[date + '|' + st]; }).length
-    : Math.max(supStores.length, stores.length);
+    : Math.max(supStores.length, stores.length) - supStores.filter(function(st){ return offMapEarly[date + '|' + st]; }).length;
 
   // Các điểm bán đã có Tồn đầu trong ngày (dùng cho báo cáo cuối ca)
   var openedMap = openedMapEarly;
@@ -2039,6 +2107,13 @@ function buildReport() {
     if (shf.from && shf.to) b.push('Ca làm việc: ' + shf.from + ' - ' + shf.to);
     b.push('');
     if (isClose) {
+      if (showTonDauInClose) {
+        b.push('Báo cáo tồn đầu ca:');
+        map[st].forEach(function(r) {
+          b.push('- ' + String(r.product).trim() + ' : ' + (hasVal(r.tonDau) ? r.tonDau : '?') + ' thùng.');
+        });
+        b.push('');
+      }
       b.push('Báo cáo số bán trong ca:'); var soThung = 0;
       map[st].forEach(function(r) {
         var sold = hasVal(r.tonDau) ? (Number(r.tonDau) - Number(r.tonCuoi)) : '?';
@@ -2057,11 +2132,14 @@ function buildReport() {
     }
     blocks.push(b);
   });
+  var offReasonMap = getOffReasonMap();
   missingAll.forEach(function(st, k) {
     var autoOff = isClose && !openedMap[st];
     var isOff = autoOff || !!offMap[date + '|' + st];
     var reasonTxt = isClose ? 'CHƯA CÓ TỒN CUỐI, DO HẾT CA LÀM VIỆC' : 'CHƯA CẬP NHẬT ĐƯỢC SỐ LIỆU, DO CHƯA TỚI GIỜ VÀO CA LÀM VIỆC';
-    blocks.push(['Điểm bán ' + (fullOrder.indexOf(st) + 1) + ': ' + st + ' - ' + (isOff ? 'OFF' : reasonTxt)]);
+    var custom = offReasonMap[date + '|' + st];
+    var offText = 'OFF' + (custom ? ': ' + custom : '');
+    blocks.push(['Điểm bán ' + (fullOrder.indexOf(st) + 1) + ': ' + st + ' - ' + (isOff ? offText : reasonTxt)]);
   });
 
   if (!blocks.length) {
@@ -2230,6 +2308,7 @@ function openAdminPanel() {
   document.getElementById('a_supOpen').checked = supOpenEnabled;
   document.getElementById('a_supClose').checked = supCloseEnabled;
   document.getElementById('a_reportVisible').checked = reportVisibleToStaff;
+  document.getElementById('a_showTonDau').checked = showTonDauInClose;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
