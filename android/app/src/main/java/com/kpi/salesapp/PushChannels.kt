@@ -11,6 +11,7 @@ import android.os.Build
 object PushChannels {
     const val OPEN = "sup_open_v2"
     const val CLOSE = "sup_close_v2"
+    const val SOS = "sos_v1"
 
     private var player: android.media.MediaPlayer? = null
 
@@ -57,5 +58,12 @@ object PushChannels {
         nm.deleteNotificationChannel("sup_close_v1")
         ch(OPEN, "Báo cáo tồn đầu ca", R.raw.sup_ton_dau_ca)
         ch(CLOSE, "Báo cáo tồn cuối ca", R.raw.sup_ton_cuoi)
+        val sos = NotificationChannel(SOS, "Báo động khẩn cấp", NotificationManager.IMPORTANCE_HIGH)
+        sos.setSound(null, null)
+        sos.enableVibration(true)
+        sos.vibrationPattern = longArrayOf(0, 800, 400, 800, 400, 800)
+        sos.setBypassDnd(true)
+        sos.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        nm.createNotificationChannel(sos)
     }
 }
