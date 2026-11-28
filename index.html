@@ -176,6 +176,7 @@ details.fold[open] > summary { margin-bottom:8px; }
 .phone-card.warn-anom { animation: cardBlink .7s ease-in-out infinite; }
 @keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
 @keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
+  .map-fab { position:fixed; right:14px; bottom:144px; z-index:9999; width:54px; height:54px; border-radius:50%; border:3px solid #fff; background:#0d6efd; color:#fff; font-size:1.3rem; box-shadow:0 4px 14px rgba(13,110,253,.6); cursor:pointer; }
   .sos-fab { position:fixed; right:14px; bottom:80px; z-index:9999; width:54px; height:54px; border-radius:50%; border:3px solid #fff; background:#dc3545; color:#fff; font-weight:900; font-size:.8rem; box-shadow:0 4px 14px rgba(220,53,69,.6); cursor:pointer; }
   </style>
 </head>
@@ -184,6 +185,7 @@ details.fold[open] > summary { margin-bottom:8px; }
 <div id="toast-container"></div><div id="toast-center"></div>
 <div id="warnOverlay"></div>
 <button class="sos-fab" onclick="userSendSOS()" title="Cầu cứu khẩn cấp">SOS</button>
+<button id="mapFab" class="map-fab" style="display:none" onclick="openStaffMap()" title="Bản đồ nhân viên">🗺️</button>
 <div class="blocker" id="blocker">
   <div class="blocker-box">
     <div id="blockerSpin" class="spinner"></div>
@@ -524,6 +526,19 @@ details.fold[open] > summary { margin-bottom:8px; }
   </div>
 </div>
 
+<div class="overlay" id="staffMapModal">
+  <div class="modal" style="max-width:440px">
+    <h3>🗺️ Vị trí nhân viên</h3>
+    <div class="hint">Chấm xanh = đang online, chấm xám = offline (vị trí lần cuối).</div>
+    <div id="staffMap" style="height:320px;border-radius:10px;margin-bottom:8px"></div>
+    <div id="staffMapList"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeStaffMap()">Đóng</button>
+      <button class="btn-confirm" onclick="loadStaffMap()">🔄 Làm mới</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="loginModal">
   <div class="modal">
     <h3>🔐 Đăng nhập Google</h3>
@@ -688,6 +703,8 @@ function updateRoleUi() {
   if (myRole === 'sup' && supOwnOnly) note = '👁️ Bạn chỉ xem được điểm bán / PG thuộc Sup ' + (mySupName || 'của bạn') + '.';
   else if (myRole === 'staff' && viewOwnOnly) note = '👁️ Bạn chỉ xem được dữ liệu do chính bạn nhập.';
   info.textContent = note;
+  var mf = document.getElementById('mapFab');
+  if (mf) mf.style.display = (isAdmin || myRole === 'admin' || myRole === 'sup') ? '' : 'none';
   applySupSlide();
 }
 
@@ -2739,6 +2756,7 @@ function checkSos() {
   GAS_RUN
     .withSuccessHandler(function(d) {
       if (!d || !d.ok || !d.active) return;
+if (myRole !== 'admin' && myRole !== 'sup' && !isAdmin) return;   // nhân viên không xem bản đồ / vị trí
       var open = document.getElementById('sosModal').classList.contains('open');
       if (d.id !== _sosSeen) {
         _sosSeen = d.id; _sosFitted = false;
@@ -2794,6 +2812,51 @@ function renderSos(d) {
 }
 
 function closeSosMap() { document.getElementById('sosModal').classList.remove('open'); }
+
+var _stMap = null, _stLayer = null, _stFitted = false;
+function openStaffMap() {
+  if (!isAdmin && myRole !== 'admin' && myRole !== 'sup') return;
+  document.getElementById('staffMapModal').classList.add('open');
+  _stFitted = false;
+  loadStaffMap();
+}
+function closeStaffMap() { document.getElementById('staffMapModal').classList.remove('open'); }
+function loadStaffMap() {
+  var list = document.getElementById('staffMapList');
+  list.innerHTML = '<div class="hint">⏳ Đang tải...</div>';
+  if (!hasServer()) { list.innerHTML = '<div class="hint">(Demo)</div>'; return; }
+  GAS_RUN
+    .withSuccessHandler(function(d) { renderStaffMap(d || {}); })
+    .withFailureHandler(function(err) { list.innerHTML = '<div class="msg error">' + escHtml(err.message) + '</div>'; })
+    .getPresence();
+}
+function renderStaffMap(d) {
+  if (!_stMap) {
+    _stMap = L.map('staffMap');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(_stMap);
+    _stLayer = L.layerGroup().addTo(_stMap);
+  }
+  _stLayer.clearLayers();
+  var now = d.now || Date.now(), users = d.users || [], pts = [], html = '', noLoc = [];
+  users.forEach(function(u) { u.online = (now - u.lastSeen) <= d.onlineMs; });
+  users.sort(function(a, b) { return a.online !== b.online ? (a.online ? -1 : 1) : b.lastSeen - a.lastSeen; });
+  users.forEach(function(u) {
+    var has = u.lat !== '' && u.lat !== null && u.lng !== '' && u.lng !== null;
+    if (!has) { noLoc.push(u); return; }
+    pts.push([u.lat, u.lng]);
+    L.circleMarker([u.lat, u.lng], { radius: 9, color: '#fff', weight: 2, fillColor: u.online ? '#28a745' : '#9e9e9e', fillOpacity: 1 })
+      .addTo(_stLayer).bindTooltip(escHtml(u.email), { direction: 'top' });
+    html += '<div class="cat-row" style="display:block"><div style="font-weight:800;word-break:break-all">' + escHtml(u.email) + '</div>'
+      + '<div style="font-size:.7rem">' + (u.online ? '<span style="color:#1e7e34;font-weight:800">🟢 Online</span>' : '<span style="color:#888;font-weight:800">⚫ Offline ' + agoText(now - u.lastSeen) + ' trước</span>') + '</div>'
+      + '<div style="font-size:.7rem"><a href="https://www.google.com/maps?q=' + u.lat + ',' + u.lng + '" target="_blank" rel="noopener">📍 Mở Google Maps</a></div></div>';
+  });
+  if (noLoc.length) html += '<div class="hint" style="text-align:left">Chưa có vị trí: ' + noLoc.map(function(u) { return escHtml(u.email); }).join('; ') + '</div>';
+  document.getElementById('staffMapList').innerHTML = html || '<div class="hint">Chưa có dữ liệu.</div>';
+  setTimeout(function() {
+    _stMap.invalidateSize();
+    if (!_stFitted && pts.length) { _stMap.fitBounds(pts, { padding: [30, 30], maxZoom: 16 }); _stFitted = true; }
+  }, 200);
+}
 function endSosNow() {
   if (!confirm('Kết thúc SOS này cho mọi người?')) return;
   GAS_RUN.withSuccessHandler(function(r) {
