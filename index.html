@@ -2864,6 +2864,22 @@ function endSosNow() {
     else showToast((r && r.error) || 'Lỗi', 'error');
   }).withFailureHandler(function(e) { showToast(e.message, 'error'); }).endSos();
 }
+/* ===== WEB GỬI VỊ TRÍ ĐỊNH KỲ (app Android đã có LocationService nên bỏ qua) ===== */
+function sendWebHeartbeat() {
+  if (window.AndroidBridge || !hasServer() || document.hidden) return;
+  if (typeof _tokenValid === 'function' && !_tokenValid()) return;
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    function(p) {
+      GAS_RUN.withSuccessHandler(function() {}).withFailureHandler(function() {})
+        .webHeartbeat({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
+    },
+    function() {},
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+setInterval(sendWebHeartbeat, 60000);
+window.addEventListener('load', function() { setTimeout(sendWebHeartbeat, 5000); });
+document.addEventListener('visibilitychange', function() { if (!document.hidden) sendWebHeartbeat(); });
 setInterval(checkSos, 10000);
 window.addEventListener('load', function() { setTimeout(checkSos, 3000); });
 document.addEventListener('visibilitychange', function() { if (!document.hidden) checkSos(); });
