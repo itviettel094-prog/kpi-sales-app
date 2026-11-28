@@ -123,6 +123,9 @@
     .grp-sec { font-size:.72rem; font-weight:800; color:#1e7e34; text-transform:uppercase; margin:8px 0 6px; }
     .grp-note { font-size:.64rem; color:#888; margin-top:6px; word-break:break-all; }
     .total-row td { background:#e8f5e9; font-weight:800; color:#1e7e34; }
+.grp.grp-anom { border-color:#dc3545; background:#fdecee; }
+.grp.grp-anom .grp-head { background:#f8d7da; }
+.grp.grp-anom .grp-title, .grp.grp-anom .grp-title small { color:#b02a37; }
     .card-header { display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left; }
     .hdr-title { flex:1; min-width:0; }
     .hdr-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
@@ -165,11 +168,17 @@ details.fold[open] > summary { margin-bottom:8px; }
 #toast-center { position:fixed; inset:0; z-index:10002; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; pointer-events:none; padding:0 16px; box-sizing:border-box; }
 .spinner { width:34px; height:34px; border:4px solid #c8e6c9; border-top-color:#28a745; border-radius:50%; margin:6px auto 10px; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+#warnOverlay { display:none; position:fixed; inset:0; z-index:99998; pointer-events:none; box-shadow: inset 0 0 0 12px rgba(220,53,69,1), inset 0 0 90px 20px rgba(220,53,69,.85); animation:warnBlink .7s ease-in-out infinite; }
+#warnOverlay.on { display:block; }
+@keyframes warnBlink { 0%,100% { opacity:1; } 50% { opacity:.2; } }
+.phone-card.warn-anom { animation: cardBlink .7s ease-in-out infinite; }
+@keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
   </style>
 </head>
 <body>
 
 <div id="toast-container"></div><div id="toast-center"></div>
+<div id="warnOverlay"></div>
 <div class="blocker" id="blocker">
   <div class="blocker-box">
     <div id="blockerSpin" class="spinner"></div>
@@ -671,6 +680,9 @@ function showUser(email) {
 
 function loadInit() {
   var today = todayStr();
+  if (hasServer()) {
+    GAS_RUN.withSuccessHandler(function(rows) { scanAnomaliesAndNotify(rows || []); }).withFailureHandler(function() {}).getStockHistory();
+  }
   if (!hasServer()) {
     storesList = ['Cửa hàng A', 'Cửa hàng B'];
     productsList = ['Sản phẩm 1', 'Sản phẩm 2', 'Sản phẩm 3'];
@@ -1730,6 +1742,7 @@ function loadHistory() {
       _salesRows = (b.sales || []).filter(function(r){ return !r.isDeleted; });
       _stockRows = (b.stock || []).filter(function(r){ return !r.isDeleted; });
       renderHistory();
+      scanAnomaliesAndNotify(b.stock || []);
     })
     .withFailureHandler(function(err) {
       box.innerHTML = '<div class="msg error">Lỗi: ' + escHtml(err.message) + '</div>';
@@ -1743,6 +1756,40 @@ function fmtDMY(d) {
 }
 
 function hasVal(v) { return !(v === '' || v === null || v === undefined); }
+
+/* ===== CẢNH BÁO SỐ LIỆU BẤT THƯỜNG (Tồn cuối > Tồn đầu) - quét toàn bộ, mọi nơi ===== */
+var _anomKnown = {};
+var _anomFirstScanDone = false;
+function computeAnomalies(stockRows) {
+  var out = [];
+  (stockRows || []).forEach(function(r) {
+    if (r.isDeleted) return;
+    if (!hasVal(r.tonDau) || !hasVal(r.tonCuoi)) return;
+    if (Number(r.tonCuoi) > Number(r.tonDau)) {
+      var st = String(r.store).trim(), p = String(r.product).trim();
+      out.push({ key: r.date + '|' + st + '|' + p, date: r.date, store: st, product: p, tonDau: r.tonDau, tonCuoi: r.tonCuoi });
+    }
+  });
+  return out;
+}
+function applyAnomalyWarning(list) {
+  var overlay = document.getElementById('warnOverlay');
+  if (overlay) overlay.classList.toggle('on', list.length > 0);
+  document.querySelectorAll('.phone-card').forEach(function(c){ c.classList.toggle('warn-anom', list.length > 0); });
+  var ids = {};
+  list.forEach(function(a){ ids[a.key] = a; });
+  var newOnes = list.filter(function(a){ return !_anomKnown[a.key]; });
+  if (list.length > 0 && (!_anomFirstScanDone || newOnes.length)) {
+    var stores = [];
+    list.forEach(function(a){ if (stores.indexOf(a.store) === -1) stores.push(a.store); });
+    showToast('⚠️ Vui lòng kiểm tra Số liệu bất thường của cửa hàng: ' + stores.join(', '), 'error', 8000, 'center');
+  }
+  _anomKnown = ids;
+  _anomFirstScanDone = true;
+}
+function scanAnomaliesAndNotify(stockRows) {
+  applyAnomalyWarning(computeAnomalies(stockRows));
+}
 
 function renderHistory() {
   var groups = {};
@@ -1770,10 +1817,12 @@ function renderHistory() {
   box.innerHTML = list.map(function(g, i) {
     var totalQty = g.sales.reduce(function(s, r){ return s + (Number(r.qty) || 0); }, 0);
     var closedCount = g.stock.filter(function(r){ return hasVal(r.tonCuoi); }).length;
+    var isAnom = g.stock.some(function(r){ return hasVal(r.tonDau) && hasVal(r.tonCuoi) && Number(r.tonCuoi) > Number(r.tonDau); });
 
     var summary = [];
     summary.push('Tồn kho: ' + (g.stock.length ? (g.stock.length + ' SP, đã có Tồn cuối ' + closedCount + '/' + g.stock.length) : 'chưa nhập'));
     summary.push('Bán hàng: ' + (g.sales.length ? (g.sales.length + ' SP, tổng ' + totalQty) : 'chưa nhập'));
+    if (isAnom) summary.push('⚠️ Số liệu bất thường — Tồn cuối > Tồn đầu');
 
     // --- Tồn kho ---
     var stockHtml;
@@ -1822,7 +1871,7 @@ function renderHistory() {
     }
 
     var isOpen = !!openGroups[g.key];
-    return '<div class="grp' + (isOpen ? ' open' : '') + '" id="grp_' + i + '">'
+    return '<div class="grp' + (isOpen ? ' open' : '') + (isAnom ? ' grp-anom' : '') + '" id="grp_' + i + '">'
       + '<div class="grp-head" onclick="toggleGroup(' + i + ')">'
       +   '<div class="grp-title">' + escHtml(fmtDMY(g.date)) + ' — ' + escHtml(g.store)
       +     '<small>' + escHtml(summary[0]) + '</small><small>' + escHtml(summary[1]) + '</small></div>'
@@ -1907,6 +1956,7 @@ function loadReport() {
       if (document.getElementById('r_date').value !== date) return;   // đã đổi ngày, bỏ kết quả cũ
       _reportStock = (rows || []).filter(function(r){ return !r.isDeleted; });
       buildReport();
+      scanAnomaliesAndNotify(rows || []);
     })
     .withFailureHandler(function(err) {
       ta.value = '';
@@ -2855,6 +2905,7 @@ function markReportsSeen() {
   updateRepBadge(_lastRepKeys);
 }
 function processReportRows(rows) {
+  scanAnomaliesAndNotify(rows);
   var keys = collectReportKeys(rows);
   _lastRepKeys = keys;
   if (_repBaseline) {   // lần đầu chỉ ghi nhớ, không phát tiếng cho dữ liệu cũ
