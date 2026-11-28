@@ -28,6 +28,13 @@ class MyFirebaseService : FirebaseMessagingService() {
         val body = d["body"] ?: msg.notification?.body ?: ""
 
         PushChannels.ensure(this)
+        if (type == "sos") {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, SosService::class.java).putExtra("title", title).putExtra("body", body)
+            )
+            return
+        }
         val isClose = type == "close"
         val channel = if (isClose) PushChannels.CLOSE else PushChannels.OPEN
         val lioId = resources.getIdentifier("lio", "raw", packageName)
