@@ -19,7 +19,15 @@ import androidx.core.os.CancellationSignal
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
@@ -46,7 +54,9 @@ class LocationService : Service() {
         val chId = "loc_service"
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
-            nm.createNotificationChannel(NotificationChannel(chId, "Định vị nền", NotificationManager.IMPORTANCE_LOW))
+            nm.createNotificationChannel(
+                NotificationChannel(chId, "Định vị nền", NotificationManager.IMPORTANCE_LOW)
+            )
         }
         val n: Notification = NotificationCompat.Builder(this, chId)
             .setContentTitle("KPI Bán Hàng")
@@ -55,9 +65,15 @@ class LocationService : Service() {
             .setOngoing(true)
             .build()
         try {
-            if (Build.VERSION.SDK_INT >= 29) startForeground(7001, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-            else startForeground(7001, n)
-        } catch (e: Exception) { stopSelf(); return START_NOT_STICKY }
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(7001, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(7001, n)
+            }
+        } catch (e: Exception) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         if (job?.isActive != true) job = scope.launch { loop() }
         return START_STICKY
@@ -66,11 +82,19 @@ class LocationService : Service() {
     private suspend fun loop() {
         val execUrl = getString(R.string.exec_url)
         while (true) {
-            if (SessionManager.getIdToken(this) == null) { stopSelf(); return }   // đã đăng xuất
+            if (SessionManager.getIdToken(this) == null) {   // đã đăng xuất
+                stopSelf()
+                return
+            }
             val p = JSONObject()
             val loc = try { currentLocation() } catch (e: Exception) { null }
             if (loc != null) {
-                p.put("loc", JSONObject().put("lat", loc.latitude).put("lng", loc.longitude).put("acc", loc.accuracy.toDouble()))
+                p.put(
+                    "loc", JSONObject()
+                        .put("lat", loc.latitude)
+                        .put("lng", loc.longitude)
+                        .put("acc", loc.accuracy.toDouble())
+                )
             }
             try { ApiClient.call(execUrl, "heartbeat", freshToken(), p) } catch (e: Exception) { }
             delay(60_000L)
@@ -88,7 +112,12 @@ class LocationService : Service() {
                 }
                 .addOnFailureListener { e -> cont.resume(Result.failure(e)) }
         }
-        r.onSuccess { token = it; tokenTime = now; return it }
+        val t = r.getOrNull()
+        if (t != null) {
+            token = t
+            tokenTime = now
+            return t
+        }
         return SessionManager.getIdToken(this)
     }
 
@@ -118,9 +147,9 @@ class LocationService : Service() {
             suspendCancellableCoroutine<Location?> { cont ->
                 val cs = CancellationSignal()
                 cont.invokeOnCancellation { cs.cancel() }
-                LocationManagerCompat.getCurrentLocation(lm, provider, cs, ContextCompat.getMainExecutor(this@LocationService)) { l ->
-                    if (cont.isActive) cont.resume(l)
-                }
+                LocationManagerCompat.getCurrentLocation(
+                    lm, provider, cs, ContextCompat.getMainExecutor(this@LocationService)
+                ) { l -> if (cont.isActive) cont.resume(l) }
             }
         }
         return loc ?: lastKnown()
