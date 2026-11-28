@@ -259,7 +259,7 @@ class MainActivity : AppCompatActivity() {
                     "pgClose" -> "sounds/pg-ton-cuoi.mp3"
                     "supOpen" -> "sounds/sup-ton-dau-ca.mp3"
                     "supClose" -> "sounds/sup-ton-cuoi.mp3"
-                    "salesOk" -> "sounds/ok.mp3"
+                    function playAnom() {   var a = _snd.anom; if (!a) return;
                     else -> return@runOnUiThread
                 }
                 try {
