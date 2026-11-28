@@ -2,6 +2,8 @@
 <html>
 <head>
   <base target="_top">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Quản Lý KPI Bán Hàng</title>   <link rel="icon" type="image/png" href="favicon.png"> <link rel="apple-touch-icon" href="favicon.png">
@@ -174,12 +176,14 @@ details.fold[open] > summary { margin-bottom:8px; }
 .phone-card.warn-anom { animation: cardBlink .7s ease-in-out infinite; }
 @keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
 @keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
+  .sos-fab { position:fixed; right:14px; bottom:80px; z-index:9999; width:54px; height:54px; border-radius:50%; border:3px solid #fff; background:#dc3545; color:#fff; font-weight:900; font-size:.8rem; box-shadow:0 4px 14px rgba(220,53,69,.6); cursor:pointer; }
   </style>
 </head>
 <body>
 
 <div id="toast-container"></div><div id="toast-center"></div>
 <div id="warnOverlay"></div>
+<button class="sos-fab" onclick="userSendSOS()" title="Cầu cứu khẩn cấp">SOS</button>
 <div class="blocker" id="blocker">
   <div class="blocker-box">
     <div id="blockerSpin" class="spinner"></div>
@@ -507,6 +511,19 @@ details.fold[open] > summary { margin-bottom:8px; }
 </div>
 
 <!-- ===================== CẦU NỐI GITHUB PAGES -> GOOGLE APPS SCRIPT (có đăng nhập Google) ===================== -->
+<div class="overlay" id="sosModal">
+  <div class="modal" style="max-width:440px;border-color:#dc3545">
+    <h3 style="color:#dc3545">🚨 SOS đang hoạt động</h3>
+    <div class="hint" id="sosInfo" style="text-align:left"></div>
+    <div id="sosMap" style="height:300px;border-radius:10px;margin-bottom:8px"></div>
+    <div id="sosList"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSosMap()">Đóng</button>
+      <button class="btn-danger" onclick="endSosNow()">Kết thúc SOS</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="loginModal">
   <div class="modal">
     <h3>🔐 Đăng nhập Google</h3>
@@ -1727,6 +1744,7 @@ function requireSup(silent) {
   if (silent !== true) {
     showMsg('k_msg', 'Vui lòng chọn "Sup phụ trách" trước.', 'error');
     showToast('Bắt buộc chọn "Sup phụ trách" trước khi nhập / lưu.', 'error');
+    playErr('errSup');
   }
   supEl.style.borderColor = '#dc3545';
   supEl.focus();
@@ -2689,6 +2707,115 @@ function adminToggleNameRow() {
   lsSet('showNameRow', document.getElementById('a_showName').checked ? '1' : '0');
   applyNameRow();
 }
+var _sosSeen = '', _sosMap = null, _sosLayer = null, _sosFitted = false, _sosMine = false;
+
+function userSendSOS() {
+  if (!confirm('GỬI TÍN HIỆU CẦU CỨU tới mọi người?\n(Kèm vị trí hiện tại của bạn)')) return;
+  if (!hasServer()) { showToast('(Demo) Đã gửi SOS.', 'success'); return; }
+  showToast('Đang lấy vị trí...', 'info', 2000, 'center');
+  var send = function(loc) {
+    GAS_RUN
+      .withSuccessHandler(function(res) {
+        if (res && res.ok) {
+          _sosMine = true;
+          showToast('🚨 Đã gửi cầu cứu tới ' + res.sent + ' máy.' + (res.hasLoc ? '' : ' (chưa có vị trí)'), 'success', 6000, 'center');
+          setTimeout(checkSos, 1500);
+        } else showToast((res && res.error) || 'Lỗi gửi SOS', 'error', 5000, 'center');
+      })
+      .withFailureHandler(function(err) { showToast('Lỗi: ' + err.message, 'error', 5000, 'center'); })
+      .sendSOS('', loc);
+  };
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(p) { send({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); },
+      function() { send(null); },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 15000 });
+  } else send(null);
+}
+
+function checkSos() {
+  if (!hasServer()) return;
+  if (!window.AndroidBridge && typeof _tokenValid === 'function' && !_tokenValid()) return;
+  GAS_RUN
+    .withSuccessHandler(function(d) {
+      if (!d || !d.ok || !d.active) return;
+      var open = document.getElementById('sosModal').classList.contains('open');
+      if (d.id !== _sosSeen) {
+        _sosSeen = d.id; _sosFitted = false;
+        document.getElementById('sosModal').classList.add('open');
+        open = true;
+      }
+      if (open) renderSos(d);
+    })
+    .withFailureHandler(function() {})
+    .getSosMap();
+}
+
+function renderSos(d) {
+  document.getElementById('sosInfo').innerHTML =
+    '<b>' + escHtml(d.tag) + '</b> (' + escHtml(d.by) + ') cần hỗ trợ — ' + agoText(d.now - d.at) + ' trước'
+    + (d.msg ? '<br>' + escHtml(d.msg) : '')
+    + (d.loc ? '' : '<br><b style="color:#dc3545">Chưa có vị trí của người cầu cứu</b>');
+  if (!_sosMap) {
+    _sosMap = L.map('sosMap');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(_sosMap);
+    _sosLayer = L.layerGroup().addTo(_sosMap);
+  }
+  _sosLayer.clearLayers();
+  var pts = [];
+  if (d.loc) {
+    pts.push([d.loc.lat, d.loc.lng]);
+    L.circleMarker([d.loc.lat, d.loc.lng], { radius: 12, color: '#fff', weight: 3, fillColor: '#dc3545', fillOpacity: 1 })
+      .addTo(_sosLayer).bindTooltip('🆘 ' + escHtml(d.tag), { permanent: true, direction: 'top' });
+  }
+  d.people.forEach(function(p) {
+    pts.push([p.lat, p.lng]);
+    var stale = p.ageMs > 10 * 60000;
+    L.circleMarker([p.lat, p.lng], { radius: 8, color: '#fff', weight: 2, fillColor: stale ? '#9e9e9e' : '#0d6efd', fillOpacity: 1 })
+      .addTo(_sosLayer).bindTooltip(escHtml(p.tag) + (p.distKm !== null ? ' · ' + p.distKm + ' km' : ''), { direction: 'top' });
+  });
+  if (!_sosFitted && pts.length) { _sosMap.fitBounds(pts, { padding: [30, 30], maxZoom: 16 }); _sosFitted = true; }
+  setTimeout(function() { _sosMap.invalidateSize(); }, 200);
+
+  var html = d.people.map(function(p, i) {
+    var stale = p.ageMs > 10 * 60000;
+    var nav = d.loc
+      ? ' <a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&origin=' + p.lat + ',' + p.lng
+        + '&destination=' + d.loc.lat + ',' + d.loc.lng + '">🧭 Chỉ đường</a>' : '';
+    return '<div class="cat-row" style="display:block"><div style="font-weight:800">' + (i + 1) + '. ' + escHtml(p.tag)
+      + (p.distKm !== null ? ' — <span style="color:#dc3545">' + p.distKm + ' km</span>' : '') + '</div>'
+      + '<div style="font-size:.68rem;color:#666;word-break:break-all">' + escHtml(p.email) + '</div>'
+      + '<div style="font-size:.7rem;color:' + (stale ? '#dc3545' : '#1e7e34') + '">'
+      + (stale ? '⚠️ Vị trí cũ ' : '📍 ') + agoText(p.ageMs) + ' trước' + nav + '</div></div>';
+  }).join('');
+  if (d.noLoc.length) html += '<div class="hint" style="text-align:left">Chưa có vị trí: '
+    + d.noLoc.map(function(p) { return escHtml(p.tag + ' ' + p.email); }).join('; ') + '</div>';
+  document.getElementById('sosList').innerHTML = html || '<div class="hint">Chưa có ai chia sẻ vị trí.</div>';
+}
+
+function closeSosMap() { document.getElementById('sosModal').classList.remove('open'); }
+function endSosNow() {
+  if (!confirm('Kết thúc SOS này cho mọi người?')) return;
+  GAS_RUN.withSuccessHandler(function(r) {
+    if (r && r.ok) { closeSosMap(); showToast('Đã kết thúc SOS.', 'success'); }
+    else showToast((r && r.error) || 'Lỗi', 'error');
+  }).withFailureHandler(function(e) { showToast(e.message, 'error'); }).endSos();
+}
+setInterval(checkSos, 10000);
+window.addEventListener('load', function() { setTimeout(checkSos, 3000); });
+document.addEventListener('visibilitychange', function() { if (!document.hidden) checkSos(); });
+
+function userSendSOS_OLD() {
+  if (!confirm('GỬI TÍN HIỆU CẦU CỨU tới Admin và tất cả Sup?\n(Kèm vị trí hiện tại của bạn)')) return;
+  if (!hasServer()) { showToast('(Demo) Đã gửi SOS.', 'success'); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) showToast('🚨 Đã gửi cầu cứu tới ' + res.sent + ' máy.', 'success', 6000, 'center');
+      else showToast((res && res.error) || 'Lỗi gửi SOS', 'error', 5000, 'center');
+    })
+    .withFailureHandler(function(err) { showToast('Lỗi: ' + err.message, 'error', 5000, 'center'); })
+    .sendSOS('');
+}
 function adminSendSOS() {
   if (!confirm('Phát chuông KHẨN CẤP tới TẤT CẢ máy đang cài app?')) return;
   GAS_RUN
@@ -2936,7 +3063,8 @@ var SOUND_FILES = {
   anom:     'sounds/lio.mp3',
   errStore: 'sounds/err-chua-chon-cua-hang.mp3',
   errDate:  'sounds/err-chua-chon-ngay.mp3',
-  errKhach: 'sounds/err-chua-nhap-khach.mp3'
+  errKhach: 'sounds/err-chua-nhap-khach.mp3',
+  errSup:   'sounds/err-chua-chon-sup.mp3'
 };
 var _snd = {}, _sndQueue = [], _sndBusy = false, _sndUnlocked = false;
 Object.keys(SOUND_FILES).forEach(function(k) {
