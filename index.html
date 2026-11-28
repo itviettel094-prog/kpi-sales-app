@@ -2261,13 +2261,13 @@ function offBlock(st, date) {
   var p = fmtDMY(date).split('-');
   var reason = (inf.reason || 'cửa hàng có việc bận gia đình').trim().replace(/[.\s]+$/, '');
   return [
-    'Ngày ' + p[0] + '/' + p[1],
-    'Họ Tên PG: ' + pgChoice(st),
-    'Điểm bán: ' + st,
+    'Ngày ' + p[0] + '/' + p[1] + '/' + p[2],
+    'Họ Tên PG: ' + pgChoice(st) + ' - OFF',
+    'Điểm bán: ' + st + ' - OFF',
     'Địa điểm: ' + (x.addr || ''),
-    inf.shift === 'change' ? ('Ca làm việc thay đổi từ ' + sh.from + ' - ' + sh.to + ' sang ' + inf.from + ' - ' + inf.to + '.') : 'Ca làm việc không thay đổi.',
-    'Ngày làm việc đổi từ ' + dmy(inf.dFrom || date) + ' Sang ' + dmy(inf.dTo || addDay(inf.dFrom || date)) + '.',
-    'Lý do: ' + reason + '.'
+    '-          ' + (inf.shift === 'change' ? ('Giờ ca làm việc thay đổi từ ' + sh.from + ' - ' + sh.to + ' sang ' + inf.from + ' - ' + inf.to + '.') : 'Giờ ca vào làm việc không thay đổi.'),
+    '-          Ngày làm việc đổi từ ' + dmy(inf.dFrom || date) + ' Sang ' + dmy(inf.dTo || addDay(inf.dFrom || date)) + '.',
+    '-          Lý do: ' + reason + '.'
   ];
 }
 function storeNo(st) { var s = normSup((storeInfo[st] || {}).sup); var list = storesList.filter(function(x) { return normSup((storeInfo[x] || {}).sup) === s; }); return list.indexOf(st) + 1; } function slProductKey(p) { var s = String(p || '').trim().toLowerCase(); if (s.indexOf('premium') !== -1) return 'premium'; if (s.indexOf('sleek') !== -1) return 'sleek'; if (s.indexOf('trúc bạch') !== -1 || s.indexOf('truc bach') !== -1) return 'trucbach'; if (s.indexOf('bia hơi') !== -1 || s.indexOf('bia hoi') !== -1) return 'biahoi'; return null; }
@@ -2378,7 +2378,7 @@ function buildReport() {
     missingAllG.forEach(function(st) {
       var autoOff = isClose && !openedMapEarly[st];
       var isOff = autoOff || !!offMap[date + '|' + st];
-      var reasonTxt = isClose ? 'CHƯA CÓ TỒN CUỐI, DO HẾT CA LÀM VIỆC' : 'CHƯA CẬP NHẬT ĐƯỢC SỐ LIỆU, DO CHƯA TỚI GIỜ VÀO CA LÀM VIỆC';
+      var reasonTxt = isClose ? 'CHƯA CÓ TỒN CUỐI, DO HẾT CA LÀM VIỆC' : 'Chưa cập nhật được dữ liệu tồn đầu, do điểm bán đăng ký chưa tới giờ vào ca làm việc.';
       var custom = offReasonMap[date + '|' + st];
       if (!autoOff && offMap[date + '|' + st]) { blocks.push(offBlock(st, date)); return; } var offText = 'OFF';
       blocks.push(['Điểm bán ' + storeNo(st) + ': ' + st + ' - ' + (isOff ? offText : reasonTxt)]);
