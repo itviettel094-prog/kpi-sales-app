@@ -169,9 +169,10 @@ details.fold[open] > summary { margin-bottom:8px; }
 .spinner { width:34px; height:34px; border:4px solid #c8e6c9; border-top-color:#28a745; border-radius:50%; margin:6px auto 10px; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 #warnOverlay { display:none; position:fixed; inset:0; z-index:99998; pointer-events:none; box-shadow: inset 0 0 0 12px rgba(220,53,69,1), inset 0 0 90px 20px rgba(220,53,69,.85); animation:warnBlink .7s ease-in-out infinite; }
-#warnOverlay.on { display:block; }
+#warnOverlay.on { display:none; }
 @keyframes warnBlink { 0%,100% { opacity:1; } 50% { opacity:.2; } }
 .phone-card.warn-anom { animation: cardBlink .7s ease-in-out infinite; }
+@keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
 @keyframes cardBlink { 0%,100% { border-color:#dc3545; box-shadow:0 0 0 4px rgba(220,53,69,.6), 0 8px 24px rgba(220,53,69,.5); } 50% { border-color:#f8d7da; box-shadow:0 0 0 1px rgba(220,53,69,.2), 0 8px 24px rgba(0,0,0,0.12); } }
   </style>
 </head>
@@ -1782,7 +1783,7 @@ function applyAnomalyWarning(list) {
   if (list.length > 0 && (!_anomFirstScanDone || newOnes.length)) {
     var stores = [];
     list.forEach(function(a){ if (stores.indexOf(a.store) === -1) stores.push(a.store); });
-    showToast('⚠️ Vui lòng kiểm tra Số liệu bất thường của cửa hàng: ' + stores.join(', '), 'error', 8000, 'center');
+    showToast('⚠️ Vui lòng kiểm tra Số liệu bất thường của cửa hàng: ' + stores.join(', '), 'error', 8000, 'center'); playSound('anom'); list.forEach(function(a){ openGroups[a.date + '||' + a.store] = true; }); setTimeout(function(){ switchView('history'); }, 300);
   }
   _anomKnown = ids;
   _anomFirstScanDone = true;
@@ -1870,7 +1871,7 @@ function renderHistory() {
       salesHtml = '<div class="msg info" style="margin-top:0">Chưa nhập thông tin bán hàng</div>';
     }
 
-    var isOpen = !!openGroups[g.key];
+    var isOpen = (openGroups[g.key] !== undefined) ? openGroups[g.key] : isAnom;
     return '<div class="grp' + (isOpen ? ' open' : '') + (isAnom ? ' grp-anom' : '') + '" id="grp_' + i + '">'
       + '<div class="grp-head" onclick="toggleGroup(' + i + ')">'
       +   '<div class="grp-title">' + escHtml(fmtDMY(g.date)) + ' — ' + escHtml(g.store)
@@ -2821,7 +2822,8 @@ var SOUND_FILES = {
   pgClose:  'sounds/pg-ton-cuoi.mp3',
   supOpen:  'sounds/sup-ton-dau-ca.mp3',
   supClose: 'sounds/sup-ton-cuoi.mp3',
-  salesOk:  'sounds/ok.mp3'
+  salesOk:  'sounds/ok.mp3',
+  anom:     'sounds/lio.mp3'
 };
 var _snd = {}, _sndQueue = [], _sndBusy = false, _sndUnlocked = false;
 Object.keys(SOUND_FILES).forEach(function(k) {
@@ -2847,7 +2849,36 @@ function unlockSounds() {
   document.addEventListener(ev, unlockSounds, { passive: true });
 });
 
+var _anomPending = false;
+document.addEventListener('touchstart', function() { if (_anomPending) { _anomPending = false; playAnom(); } }, { passive: true });
+document.addEventListener('click', function() { if (_anomPending) { _anomPending = false; playAnom(); } });
+function playAnom() {
+  var a = _snd.anom; if (!a) return;
+  try {
+    a._real = true; a.currentTime = 0; a.muted = false;
+    var p = a.play();
+    if (p && p.catch) p.catch(function() {
+      _anomPending = true;
+      if (window.AndroidBridge && typeof AndroidBridge.playNativeSound === 'function') {
+        try { AndroidBridge.playNativeSound('anom'); } catch (e) {}
+      }
+    });
+  } catch (e) { _anomPending = true; }
+}
+function playAnom_OLD() {
+  var a = _snd.anom; if (!a) return;
+  try {
+    a.currentTime = 0; a.muted = false;
+    var p = a.play();
+    if (p && p.catch) p.catch(function() {
+      if (window.AndroidBridge && typeof AndroidBridge.playNativeSound === 'function') {
+        try { AndroidBridge.playNativeSound('anom'); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+}
 function playSound(name) {
+  if (name === 'anom') { playAnom(); return; }
   if (window.AndroidBridge && typeof AndroidBridge.playNativeSound === 'function') {
     try { AndroidBridge.playNativeSound(name); return; } catch (e) {}
   }
