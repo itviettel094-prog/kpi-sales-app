@@ -274,6 +274,9 @@ class MainActivity : AppCompatActivity() {
                     "supClose" -> "sounds/sup-ton-cuoi.mp3"
                     "salesOk" -> "sounds/ok.mp3"
                     "anom" -> "sounds/lio.mp3"
+                    "errStore" -> "sounds/err-chua-chon-cua-hang.mp3"
+                    "errDate" -> "sounds/err-chua-chon-ngay.mp3"
+                    "errKhach" -> "sounds/err-chua-nhap-khach.mp3"
                     else -> return@runOnUiThread
                 }
                 try {
@@ -285,7 +288,14 @@ class MainActivity : AppCompatActivity() {
                             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                             .build()
                     )
-                    val afd = assets.openFd(assetPath)
+                    val afd = try {
+                        assets.openFd(assetPath)
+                    } catch (e: Exception) {
+                        val rid = resources.getIdentifier(
+                            assetPath.substringAfterLast('/').substringBeforeLast('.').replace('-', '_'),
+                            "raw", packageName)
+                        resources.openRawResourceFd(rid)
+                    }
                     mediaPlayer?.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                     afd.close()
                     mediaPlayer?.setOnCompletionListener { it.release() }
