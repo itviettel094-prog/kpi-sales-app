@@ -1,31 +1,15 @@
 package com.kpi.salesapp
 
 import android.Manifest
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.media.AudioAttributes
-import android.os.Build
-import com.google.firebase.messaging.FirebaseMessaging
-import androidx.activity.result.IntentSenderRequest
-import com.google.android.gms.common.api.ResolvableApiException
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.LocationSettingsRequest
-import com.google.android.gms.location.Priority
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
-import android.net.Uri
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.core.location.LocationManagerCompat
-import androidx.core.os.CancellationSignal
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
-import android.annotation.SuppressLint
-import android.content.Intent
+import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
@@ -35,15 +19,29 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
+import androidx.core.os.CancellationSignal
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import me.leolin.shortcutbadger.ShortcutBadger
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.Priority
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import me.leolin.shortcutbadger.ShortcutBadger
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
@@ -88,12 +86,18 @@ private const val SHIM_JS = """
     adminSetViewScope:  ['adminSetViewScope', D, function (a) { return { viewOwn: a[0], supOwn: a[1] }; }],
     adminSetSupLinkVisible: ['adminSetSupLinkVisible', D, function (a) { return { on: a[0] }; }],
     adminSetSupSlideVisible: ['adminSetSupSlideVisible', D, function (a) { return { on: a[0] }; }],
-    adminSetSupOpenEnabled: ['adminSetSupOpenEnabled', D, function (a) { return { on: a[0] }; }],     adminSetSupCloseEnabled: ['adminSetSupCloseEnabled', D, function (a) { return { on: a[0] }; }],     adminSetReportVisibleToStaff: ['adminSetReportVisibleToStaff', D, function (a) { return { on: a[0] }; }],     adminSetShowTonDauInClose: ['adminSetShowTonDauInClose', D, function (a) { return { on: a[0] }; }],
+    adminSetSupOpenEnabled: ['adminSetSupOpenEnabled', D, function (a) { return { on: a[0] }; }],
+    adminSetSupCloseEnabled: ['adminSetSupCloseEnabled', D, function (a) { return { on: a[0] }; }],
+    adminSetReportVisibleToStaff: ['adminSetReportVisibleToStaff', D, function (a) { return { on: a[0] }; }],
+    adminSetShowTonDauInClose: ['adminSetShowTonDauInClose', D, function (a) { return { on: a[0] }; }],
     adminSetSchedule:   ['adminSetSchedule', D, function (a) { return { sched: a[0] }; }],
     adminRenameCatalog: ['adminRenameCatalog', D, function (a) { return { type: a[0], oldName: a[1], newName: a[2] }; }],
     adminDeleteCatalog: ['adminDeleteCatalog', D, function (a) { return { type: a[0], name: a[1] }; }],
     adminGetSyncStatus: ['adminGetSyncStatus', D, function (a) { return { date: a[0] }; }],
-    adminSetStoreInfo:  ['adminSetStoreInfo', D, function (a) { return { store: a[0], info: a[1] }; }],     adminSyncStore:     ['adminSyncStore', D, function (a) { return { date: a[0], store: a[1] }; }],     adminDeleteSync:    ['adminDeleteSync', D, function (a) { return { date: a[0], store: a[1] }; }],     saveShiftTime:      ['saveShiftTime', V, function (a) { return { store: a[0], from: a[1], to: a[2] }; }]
+    adminSetStoreInfo:  ['adminSetStoreInfo', D, function (a) { return { store: a[0], info: a[1] }; }],
+    adminSyncStore:     ['adminSyncStore', D, function (a) { return { date: a[0], store: a[1] }; }],
+    adminDeleteSync:    ['adminDeleteSync', D, function (a) { return { date: a[0], store: a[1] }; }],
+    saveShiftTime:      ['saveShiftTime', V, function (a) { return { store: a[0], from: a[1], to: a[2] }; }]
   };
   function run(name, args, ok, fail) {
     ok = ok || function () {};
@@ -159,13 +163,14 @@ class MainActivity : AppCompatActivity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.mediaPlaybackRequiresUserGesture = false   // cho phép phát tiếng không cần chạm
-                webView.webViewClient = object : WebViewClient() {
+
+        webView.webViewClient = object : WebViewClient() {
             // Phục vụ file âm thanh nằm trong assets/sounds/ cho trang web trong app
             override fun shouldInterceptRequest(view: WebView?, request: android.webkit.WebResourceRequest?): android.webkit.WebResourceResponse? {
                 val u = request?.url
                 val path = u?.path
                 if (u != null && u.host == "appassets.local" && path != null && path.startsWith("/sounds/")) {
-                    // 1) tìm trong assets/sounds/  2) không có thì tìm trong res/raw (đổi "-" thành "_", vd. sup-ton-dau-ca.mp3 -> sup_ton_dau_ca)
+                    // 1) tìm trong assets/sounds/  2) không có thì tìm trong res/raw (đổi "-" thành "_")
                     try {
                         return android.webkit.WebResourceResponse("audio/mpeg", null, assets.open(path.trimStart('/')))
                     } catch (e: Exception) { }
@@ -177,6 +182,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 return super.shouldInterceptRequest(view, request)
             }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: android.webkit.WebResourceRequest?): Boolean {
                 val url = request?.url ?: return false
                 if (url.host == "appassets.local") return false
@@ -184,6 +190,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onJsAlert(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
                 AlertDialog.Builder(this@MainActivity).setMessage(message)
@@ -191,6 +198,7 @@ class MainActivity : AppCompatActivity() {
                     .setOnCancelListener { result.cancel() }.show()
                 return true
             }
+
             override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: JsResult): Boolean {
                 AlertDialog.Builder(this@MainActivity).setMessage(message)
                     .setPositiveButton("OK") { _, _ -> result.confirm() }
@@ -198,6 +206,7 @@ class MainActivity : AppCompatActivity() {
                     .setOnCancelListener { result.cancel() }.show()
                 return true
             }
+
             override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: JsPromptResult): Boolean {
                 val input = EditText(this@MainActivity)
                 input.setText(defaultValue ?: "")
@@ -213,7 +222,8 @@ class MainActivity : AppCompatActivity() {
         val html = assets.open("index.html").bufferedReader().use { it.readText() }
             .replaceFirst("<head>", "<head><script>$SHIM_JS</script>")
         webView.loadDataWithBaseURL("https://appassets.local/", html, "text/html", "UTF-8", null)
-                askLocationConsent()
+
+        askLocationConsent()
         askBadgePermission()
     }
 
@@ -251,6 +261,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
         @JavascriptInterface
         fun playNativeSound(name: String) {
             runOnUiThread {
@@ -259,7 +270,8 @@ class MainActivity : AppCompatActivity() {
                     "pgClose" -> "sounds/pg-ton-cuoi.mp3"
                     "supOpen" -> "sounds/sup-ton-dau-ca.mp3"
                     "supClose" -> "sounds/sup-ton-cuoi.mp3"
-                    function playAnom() {   var a = _snd.anom; if (!a) return;
+                    "salesOk" -> "sounds/ok.mp3"
+                    "anom" -> "sounds/lio.mp3"
                     else -> return@runOnUiThread
                 }
                 try {
@@ -354,7 +366,7 @@ class MainActivity : AppCompatActivity() {
         return if (needReauth) null else idToken.ifEmpty { null }
     }
 
-        // ===== ONLINE + VỊ TRÍ =====
+    // ===== ONLINE + VỊ TRÍ =====
     private var hbJob: Job? = null
 
     private val locPermLauncher = registerForActivityResult(
@@ -432,7 +444,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @android.annotation.SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission")
     private fun lastKnownLocation(): Location? {
         if (!hasLocPerm()) return null
         val lm = getSystemService(LOCATION_SERVICE) as LocationManager
@@ -441,7 +453,7 @@ class MainActivity : AppCompatActivity() {
         }.maxByOrNull { it.time }
     }
 
-    @android.annotation.SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission")
     private suspend fun currentLocation(): Location? {
         if (!hasLocPerm()) return null
         val lm = getSystemService(LOCATION_SERVICE) as LocationManager
@@ -480,7 +492,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-        override fun onStart() {
+    override fun onStart() {
         getSharedPreferences("session", MODE_PRIVATE).edit()
             .putInt("unread", 0)
             .remove("notif_lines")
