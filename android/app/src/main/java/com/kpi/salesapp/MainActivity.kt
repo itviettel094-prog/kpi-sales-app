@@ -99,7 +99,8 @@ private const val SHIM_JS = """
     adminSyncStore:     ['adminSyncStore', D, function (a) { return { date: a[0], store: a[1] }; }],
     adminDeleteSync:    ['adminDeleteSync', D, function (a) { return { date: a[0], store: a[1] }; }],
     saveShiftTime:      ['saveShiftTime', V, function (a) { return { store: a[0], from: a[1], to: a[2] }; }],
-    adminSendSOS:       ['adminSendSOS', D, function (a) { return { message: a[0] }; }]
+    adminSendSOS:       ['adminSendSOS', D, function (a) { return { message: a[0] }; }],
+    sendSOS:            ['sendSOS', D, function (a) { return { message: a[0] }; }]
   };
   function run(name, args, ok, fail) {
     ok = ok || function () {};
@@ -397,7 +398,7 @@ class MainActivity : AppCompatActivity() {
 
     private val locPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { ensureGpsOn() }
+    ) { ensureGpsOn(); startLocationService() }
 
     private val gpsResolutionLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -418,6 +419,13 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
+    private fun startLocationService() {
+        if (!hasLocPerm()) return
+        try {
+            ContextCompat.startForegroundService(this, Intent(this, LocationService::class.java))
+        } catch (e: Exception) { }
+    }
+
     private fun hasLocPerm(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -428,7 +436,7 @@ class MainActivity : AppCompatActivity() {
         if (prefs.getBoolean("locAsked", false)) return
         AlertDialog.Builder(this)
             .setTitle("Chia sẻ hoạt động & vị trí")
-            .setMessage("Khi bạn đang mở ứng dụng, quản lý sẽ thấy bạn đang online, vị trí gần nhất và thao tác cuối cùng của bạn. Khi tắt ứng dụng sẽ không ghi vị trí.")
+            .setMessage("Khi bạn đang mở ứng dụng, quản lý sẽ thấy bạn đang online, vị trí gần nhất và thao tác cuối cùng của bạn. Vị trí được cập nhật liên tục cả khi ứng dụng chạy nền để phục vụ cầu cứu khẩn cấp (SOS).")
             .setPositiveButton("Đồng ý") { _, _ ->
                 prefs.edit().putBoolean("locAsked", true).apply()
                 locPermLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -529,7 +537,7 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         setupPush()
         registerPushToken()
-        startHeartbeat()
+        startLocationService()
         ensureGpsOn()
     }
 
@@ -545,6 +553,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun goLogin() {
+        stopService(Intent(this, LocationService::class.java))
         startActivity(Intent(this, LoginActivity::class.java))
         finish()
     }
