@@ -24,11 +24,17 @@ class MyFirebaseService : FirebaseMessagingService() {
     override fun onMessageReceived(msg: RemoteMessage) {
         val d = msg.data
         val type = d["type"] ?: "open"
+
+        if (type == "locreq") {
+            requestLocationNow()
+            return
+        }
         val title = d["title"] ?: msg.notification?.title ?: "KPI Bán Hàng"
         val body = d["body"] ?: msg.notification?.body ?: ""
 
         PushChannels.ensure(this)
         if (type == "sos") {
+            requestLocationNow()
             ContextCompat.startForegroundService(
                 this,
                 Intent(this, SosService::class.java).putExtra("title", title).putExtra("body", body)
@@ -86,6 +92,18 @@ class MyFirebaseService : FirebaseMessagingService() {
         NotificationManagerCompat.from(this).notify(NOTIF_ID, n)
         ShortcutBadger.applyCount(this, unread)
         PushChannels.play(this, raw)
+    }
+
+    private fun requestLocationNow() {
+        if (SessionManager.getIdToken(this) == null) return
+        try {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, LocationService::class.java).setAction(LocationService.ACTION_PING)
+            )
+        } catch (e: Exception) {
+            // Android 12+ có thể chặn start foreground service từ nền; bỏ qua
+        }
     }
 
     companion object {
