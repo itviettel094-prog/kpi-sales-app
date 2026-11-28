@@ -513,6 +513,7 @@ class MainActivity : AppCompatActivity() {
             .remove("notif_lines")
             .apply()
         androidx.core.app.NotificationManagerCompat.from(this).cancelAll()
+        stopService(Intent(this, SosService::class.java))
         ShortcutBadger.removeCount(this)
         super.onStart()
         setupPush()
