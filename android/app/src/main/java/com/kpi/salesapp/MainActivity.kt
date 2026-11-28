@@ -277,6 +277,7 @@ class MainActivity : AppCompatActivity() {
                     "errStore" -> "sounds/err-chua-chon-cua-hang.mp3"
                     "errDate" -> "sounds/err-chua-chon-ngay.mp3"
                     "errKhach" -> "sounds/err-chua-nhap-khach.mp3"
+                    "errSup" -> "sounds/err-chua-chon-sup.mp3"
                     else -> return@runOnUiThread
                 }
                 try {
