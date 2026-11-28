@@ -4,8 +4,6 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
@@ -24,8 +22,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.location.LocationManagerCompat
-import androidx.core.os.CancellationSignal
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
@@ -36,11 +32,9 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.Priority
 import com.google.firebase.messaging.FirebaseMessaging
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
 import me.leolin.shortcutbadger.ShortcutBadger
 import org.json.JSONObject
 import kotlin.coroutines.resume
@@ -393,9 +387,7 @@ class MainActivity : AppCompatActivity() {
         return if (needReauth) null else idToken.ifEmpty { null }
     }
 
-    // ===== ONLINE + VỊ TRÍ =====
-    private var hbJob: Job? = null
-
+    // ===== ĐỊNH VỊ NỀN (LocationService gửi vị trí mỗi 60 giây, chạy cả khi tắt màn hình) =====
     private val locPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { ensureGpsOn(); startLocationService() }
@@ -478,54 +470,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun lastKnownLocation(): Location? {
-        if (!hasLocPerm()) return null
-        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
-        return lm.getProviders(true).mapNotNull {
-            try { lm.getLastKnownLocation(it) } catch (e: Exception) { null }
-        }.maxByOrNull { it.time }
-    }
-
-    @SuppressLint("MissingPermission")
-    private suspend fun currentLocation(): Location? {
-        if (!hasLocPerm()) return null
-        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
-        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val provider = when {
-            fine && lm.isProviderEnabled(LocationManager.GPS_PROVIDER) -> LocationManager.GPS_PROVIDER
-            lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) -> LocationManager.NETWORK_PROVIDER
-            else -> return lastKnownLocation()
-        }
-        val loc = withTimeoutOrNull(8000L) {
-            suspendCancellableCoroutine<Location?> { cont ->
-                val cs = CancellationSignal()
-                cont.invokeOnCancellation { cs.cancel() }
-                LocationManagerCompat.getCurrentLocation(lm, provider, cs, ContextCompat.getMainExecutor(this@MainActivity)) { l ->
-                    if (cont.isActive) cont.resume(l)
-                }
-            }
-        }
-        return loc ?: lastKnownLocation()
-    }
-
-    private fun startHeartbeat() {
-        if (!::webView.isInitialized) return
-        hbJob?.cancel()
-        hbJob = lifecycleScope.launch {
-            while (true) {
-                val p = JSONObject()
-                val loc = try { currentLocation() } catch (e: Exception) { null }
-                if (loc != null) {
-                    p.put("loc", JSONObject()
-                        .put("lat", loc.latitude).put("lng", loc.longitude).put("acc", loc.accuracy.toDouble()))
-                }
-                try { ApiClient.call(execUrl, "heartbeat", freshToken(), p) } catch (e: Exception) { }
-                delay(60_000L)
-            }
-        }
-    }
-
     override fun onStart() {
         getSharedPreferences("session", MODE_PRIVATE).edit()
             .putInt("unread", 0)
@@ -539,11 +483,6 @@ class MainActivity : AppCompatActivity() {
         registerPushToken()
         startLocationService()
         ensureGpsOn()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        hbJob?.cancel()
     }
 
     override fun onDestroy() {
