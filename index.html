@@ -2737,28 +2737,60 @@ function adminToggleNameRow() {
 }
 var _sosSeen = '', _sosMap = null, _sosLayer = null, _sosFitted = false, _sosMine = false;
 
+Var SOS_MAX_ACCURACY_M = 100;   // độ chính xác GPS bắt buộc phải đạt (mét) mới cho gửi SOS
 function userSendSOS() {
-  if (!confirm('GỬI TÍN HIỆU CẦU CỨU tới mọi người?\n(Kèm vị trí hiện tại của bạn)')) return;
   if (!hasServer()) { showToast('(Demo) Đã gửi SOS.', 'success'); return; }
-  showToast('Đang lấy vị trí...', 'info', 2000, 'center');
-  var send = function(loc) {
-    GAS_RUN
-      .withSuccessHandler(function(res) {
-        if (res && res.ok) {
-          _sosMine = true;
-          showToast('🚨 Đã gửi cầu cứu tới ' + res.sent + ' máy.' + (res.hasLoc ? '' : ' (chưa có vị trí)'), 'success', 6000, 'center');
-          setTimeout(checkSos, 1500);
-        } else showToast((res && res.error) || 'Lỗi gửi SOS', 'error', 5000, 'center');
-      })
-      .withFailureHandler(function(err) { showToast('Lỗi: ' + err.message, 'error', 5000, 'center'); })
-      .sendSOS('', loc);
-  };
-  if (navigator.geolocation) {
+  if (!navigator.geolocation) {
+    showBlocker('❌ Không thể gửi SOS', 'Thiết bị / trình duyệt này không hỗ trợ định vị GPS. Vui lòng dùng điện thoại có GPS hoặc trình duyệt khác (Chrome, Safari).', false, true);
+    return;
+  }
+  showBlocker('📍 Đang định vị GPS...', '<div style="text-align:center;width:100%">Vui lòng chờ, không tắt màn hình.<br>Cần định vị chính xác mới gửi được SOS.</div>', true, false);
+
+  var tries = 0, maxTries = 3;
+  function attempt() {
+    tries++;
     navigator.geolocation.getCurrentPosition(
-      function(p) { send({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }); },
-      function() { send(null); },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 15000 });
-  } else send(null);
+      function(p) {
+        var acc = p.coords.accuracy;
+        if (acc > SOS_MAX_ACCURACY_M) {
+          if (tries < maxTries) { attempt(); return; }
+          showBlocker('⚠️ Định vị chưa đủ chính xác',
+            'Độ chính xác hiện tại: ' + Math.round(acc) + ' m (cần dưới ' + SOS_MAX_ACCURACY_M + ' m).<br><br>'
+            + 'Vui lòng ra chỗ thoáng (ngoài trời, gần cửa sổ), bật GPS trong cài đặt máy, rồi bấm Thử lại.',
+            false, true);
+          document.getElementById('blockerActions').innerHTML = '<button class="btn-confirm" onclick="hideBlocker();userSendSOS();">🔄 Thử lại</button>';
+          document.getElementById('blockerActions').style.display = '';
+          return;
+        }
+        confirmAndSendSOS({ lat: p.coords.latitude, lng: p.coords.longitude, acc: acc });
+      },
+      function(err) {
+        if (tries < maxTries) { attempt(); return; }
+        var reason = (err.code === err.PERMISSION_DENIED)
+          ? 'Bạn chưa cho phép quyền Vị trí. Vào cài đặt trình duyệt &gt; Quyền trang web &gt; Vị trí &gt; Cho phép, rồi thử lại.'
+          : 'Không lấy được tín hiệu GPS. Vui lòng ra chỗ thoáng và thử lại.';
+        showBlocker('❌ Không thể gửi SOS', reason, false, true);
+        document.getElementById('blockerActions').innerHTML = '<button class="btn-confirm" onclick="hideBlocker();userSendSOS();">🔄 Thử lại</button>';
+        document.getElementById('blockerActions').style.display = '';
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+  }
+  attempt();
+}
+function confirmAndSendSOS(loc) {
+  hideBlocker();
+  if (!confirm('Đã xác định vị trí (độ chính xác ' + Math.round(loc.acc) + ' m).\nGỬI TÍN HIỆU CẦU CỨU tới mọi người?')) return;
+  showToast('Đang gửi SOS...', 'info', 2000, 'center');
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) {
+        _sosMine = true;
+        showToast('🚨 Đã gửi cầu cứu tới ' + res.sent + ' máy.', 'success', 6000, 'center');
+        setTimeout(checkSos, 1500);
+      } else showToast((res && res.error) || 'Lỗi gửi SOS', 'error', 5000, 'center');
+    })
+    .withFailureHandler(function(err) { showToast('Lỗi: ' + err.message, 'error', 5000, 'center'); })
+    .sendSOS('', loc);
 }
 
 function checkSos() {
