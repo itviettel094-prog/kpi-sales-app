@@ -98,7 +98,8 @@ private const val SHIM_JS = """
     adminSetStoreInfo:  ['adminSetStoreInfo', D, function (a) { return { store: a[0], info: a[1] }; }],
     adminSyncStore:     ['adminSyncStore', D, function (a) { return { date: a[0], store: a[1] }; }],
     adminDeleteSync:    ['adminDeleteSync', D, function (a) { return { date: a[0], store: a[1] }; }],
-    saveShiftTime:      ['saveShiftTime', V, function (a) { return { store: a[0], from: a[1], to: a[2] }; }]
+    saveShiftTime:      ['saveShiftTime', V, function (a) { return { store: a[0], from: a[1], to: a[2] }; }],
+    adminSendSOS:       ['adminSendSOS', D, function (a) { return { message: a[0] }; }]
   };
   function run(name, args, ok, fail) {
     ok = ok || function () {};
