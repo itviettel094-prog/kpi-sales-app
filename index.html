@@ -1681,8 +1681,12 @@ function addStockLine(silent) {
   var product = document.getElementById('k_product').value;
   var qty = document.getElementById('k_qty').value;
   if (!requireSup(silent === true)) return false;
-  if (!date || !store || store === '__add_new__') {
-    if (silent !== true) showMsg('k_msg', 'Vui lòng chọn ngày và cửa hàng trước.', 'error');
+  if (!date) {
+    if (silent !== true) { showMsg('k_msg', 'Vui lòng chọn ngày làm việc trước.', 'error'); playErr('errDate'); }
+    return false;
+  }
+  if (!store || store === '__add_new__') {
+    if (silent !== true) { showMsg('k_msg', 'Vui lòng chọn cửa hàng trước.', 'error'); playErr('errStore'); }
     return false;
   }
   if (!product || product === '__add_new__' || qty === '') {
@@ -1733,13 +1737,15 @@ function saveStockEntry() {
   var store = document.getElementById('k_store').value;
 
   if (!requireSup()) return;
-  if (!date || !store || store === '__add_new__') { showMsg('k_msg', 'Vui lòng chọn ngày và cửa hàng.', 'error'); return; }
+  if (!date) { showMsg('k_msg', 'Vui lòng chọn ngày làm việc.', 'error'); playErr('errDate'); return; }
+  if (!store || store === '__add_new__') { showMsg('k_msg', 'Vui lòng chọn cửa hàng.', 'error'); playErr('errStore'); return; }
   var _willClose = (stockMode === 'close') || stockCart.some(function(c){ return c.mode === 'close'; });
   if (_willClose) {
     var _kEl = document.getElementById('k_khach'), _kv = _kEl.value.trim();
     if (_kv === '' || isNaN(Number(_kv)) || Number(_kv) < 0) {
       showMsg('k_msg', 'Vui lòng nhập "Khách tiếp cận" trước khi lưu Tồn cuối.', 'error');
       showToast('Bắt buộc nhập "Khách tiếp cận" khi lưu Tồn cuối.', 'error');
+      playErr('errKhach');
       _kEl.style.borderColor = '#dc3545';
       _kEl.focus();
       return;
@@ -2927,7 +2933,10 @@ var SOUND_FILES = {
   supOpen:  'sounds/sup-ton-dau-ca.mp3',
   supClose: 'sounds/sup-ton-cuoi.mp3',
   salesOk:  'sounds/ok.mp3',
-  anom:     'sounds/lio.mp3'
+  anom:     'sounds/lio.mp3',
+  errStore: 'sounds/err-chua-chon-cua-hang.mp3',
+  errDate:  'sounds/err-chua-chon-ngay.mp3',
+  errKhach: 'sounds/err-chua-nhap-khach.mp3'
 };
 var _snd = {}, _sndQueue = [], _sndBusy = false, _sndUnlocked = false;
 Object.keys(SOUND_FILES).forEach(function(k) {
@@ -2992,6 +3001,14 @@ function playSound(name) {
   var a = _snd[name]; if (!a) return;
   Object.keys(_snd).forEach(function(k) { try { _snd[k].pause(); _snd[k].currentTime = 0; } catch (e) {} });
   try { a._real = true; a.muted = false; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {}
+}
+function playErr(name) {
+  if (window.AndroidBridge && typeof AndroidBridge.playNativeSound === 'function') {
+    try { AndroidBridge.playNativeSound(name); return; } catch (e) {}
+  }
+  var a = _snd[name]; if (!a) return;
+  Object.keys(_snd).forEach(function(k) { try { _snd[k].pause(); _snd[k].currentTime = 0; } catch (e) {} });
+  try { a._real = true; a.muted = false; a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function() {}); } catch (e) {}
 }
 function runSoundQueue() {
   if (_sndBusy || !_sndQueue.length) return;
