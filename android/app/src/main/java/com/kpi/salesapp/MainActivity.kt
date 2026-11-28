@@ -304,12 +304,25 @@ class MainActivity : AppCompatActivity() {
                         goLogin()
                         return@launch
                     }
-                    val res: JSONObject = try {
+                    var res: JSONObject = try {
                         ApiClient.call(execUrl, action, token, JSONObject(paramsJson))
                     } catch (e: Exception) {
                         JSONObject().put("ok", false).put("error", "Không kết nối được server: ${e.message}")
                     }
+                    var needLogout = false
                     if (res.optString("error").startsWith("Phiên đăng nhập")) {
+                        val t2 = freshToken(true)
+                        if (t2 == null) {
+                            needLogout = true
+                        } else {
+                            res = try {
+                                ApiClient.call(execUrl, action, t2, JSONObject(paramsJson))
+                            } catch (e: Exception) {
+                                JSONObject().put("ok", false).put("error", "Không kết nối được server: ${e.message}")
+                            }
+                        }
+                    }
+                    if (needLogout) {
                         Toast.makeText(this@MainActivity, "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Toast.LENGTH_LONG).show()
                         SessionManager.clear(this@MainActivity)
                         goLogin()
@@ -324,9 +337,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ID token Google chỉ sống ~1 giờ nên tự làm mới ngầm khi đã cũ
-    private suspend fun freshToken(): String? {
+    private suspend fun freshToken(force: Boolean = false): String? {
         val now = System.currentTimeMillis()
-        if (idToken.isNotEmpty() && now - tokenTime < 40 * 60 * 1000L) return idToken
+        if (!force && idToken.isNotEmpty() && now - tokenTime < 40 * 60 * 1000L) return idToken
 
         var needReauth = false
         var gotToken: String? = null
