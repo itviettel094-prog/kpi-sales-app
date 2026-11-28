@@ -33,6 +33,10 @@ import kotlin.coroutines.resume
 
 class LocationService : Service() {
 
+    companion object {
+        const val ACTION_PING = "com.kpi.salesapp.ACTION_PING"
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
     private lateinit var googleClient: GoogleSignInClient
@@ -76,6 +80,7 @@ class LocationService : Service() {
         }
 
         if (job?.isActive != true) job = scope.launch { loop() }
+        if (intent?.action == ACTION_PING) scope.launch { sendOnce() }
         return START_STICKY
     }
 
@@ -99,6 +104,21 @@ class LocationService : Service() {
             try { ApiClient.call(execUrl, "heartbeat", freshToken(), p) } catch (e: Exception) { }
             delay(60_000L)
         }
+    }
+
+    private suspend fun sendOnce() {
+        val execUrl = getString(R.string.exec_url)
+        val p = JSONObject()
+        val loc = try { currentLocation() } catch (e: Exception) { null }
+        if (loc != null) {
+            p.put(
+                "loc", JSONObject()
+                    .put("lat", loc.latitude)
+                    .put("lng", loc.longitude)
+                    .put("acc", loc.accuracy.toDouble())
+            )
+        }
+        try { ApiClient.call(execUrl, "heartbeat", freshToken(), p) } catch (e: Exception) { }
     }
 
     private suspend fun freshToken(): String? {
