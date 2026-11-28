@@ -448,6 +448,12 @@ details.fold[open] > summary { margin-bottom:8px; }
   <div class="input-group"><button class="btn-secondary" style="padding:9px" onclick="adminSaveDelay()">Lưu</button></div>
 </div>
 
+<div class="grp-sec">🎁 Số lon quà tặng tối đa (mỗi loại/ngày/điểm bán)</div>
+<div class="row row-ds">
+  <div class="input-group"><input type="number" id="a_maxQua" min="0" max="1000"></div>
+  <div class="input-group"><button class="btn-secondary" style="padding:9px" onclick="adminSaveMaxQua()">Lưu</button></div>
+</div>
+
 <details class="fold" style="margin-bottom:8px">
   <summary class="grp-sec" style="margin:0">⏰ Hẹn giờ mở nhập Tồn đầu / Tồn cuối</summary>
   <div class="hint" style="margin-bottom:6px">Bật: nhân viên chỉ nhập được trong khung giờ đã đặt. Tắt: không giới hạn giờ. Admin luôn nhập được.</div>
@@ -1411,6 +1417,7 @@ function buildSavedHtml(res, mode) {
 }
 /* ===== TỒN KHO (kiểu thu ngân) ===== */
 var CLOSE_DELAY_MS = 2 * 60 * 60 * 1000;   // chờ 2 tiếng sau Tồn đầu mới nhập Tồn cuối (server cũng kiểm tra lại)
+var MAX_QUA_PER_LOAI = 6;
 var stockCart = [];                        // {product, qty, mode}
 var stockMode = 'open';                    // open (tồn đầu) | close (tồn cuối)
 var stockStatus = { started: [], full: [], openAt: {} };
@@ -1541,6 +1548,7 @@ function setStockBundle(b, date) {
   if (b.reportVisibleToStaff !== undefined) { reportVisibleToStaff = !!b.reportVisibleToStaff; }
   if (b.showTonDauInClose !== undefined) { showTonDauInClose = !!b.showTonDauInClose; }
   if (b.supEditEnabled !== undefined) { supEditEnabled = !!b.supEditEnabled; }
+  if (b.maxQuaPerLoai !== undefined) { MAX_QUA_PER_LOAI = b.maxQuaPerLoai; }
   applySalesNav();
   applyReportNav();
   if (b.now) stockClockOffset = b.now - Date.now();   // dùng giờ server để tránh sai giờ máy
@@ -2354,7 +2362,7 @@ function buildReport() {
           b.push('- ' + String(r.product).trim() + ' : ' + sold + ' thùng.');
         });
         b.push('');
-        var qua = Math.min(soThung, 8);
+        var qua = Math.min(soThung, MAX_QUA_PER_LOAI);
         b.push('🎁 Quà khuyến mãi :'); b.push('- Bia Hà Nội : ' + qua + ' lon.'); b.push('- Bia Hà Nội Premium : ' + qua + ' lon.'); b.push(''); b.push('Báo cáo tồn cuối ca:');
         map[st].forEach(function(r) {
           b.push('- ' + String(r.product).trim() + ' : ' + r.tonCuoi + ' thùng.');
@@ -2609,6 +2617,7 @@ function openAdminPanel() {
   document.getElementById('a_reportVisible').checked = reportVisibleToStaff;
   document.getElementById('a_showTonDau').checked = showTonDauInClose;
   document.getElementById('a_supEdit').checked = supEditEnabled;
+  document.getElementById('a_maxQua').value = MAX_QUA_PER_LOAI;
   fillScheduleForm();
   renderAdminLists();
   loadPresence();
@@ -2979,6 +2988,18 @@ function adminSaveDelay() {
     })
     .withFailureHandler(adminFail)
     .adminSetDelay(Number(v), adminToken);
+}
+function adminSaveMaxQua() {
+  var v = document.getElementById('a_maxQua').value;
+  if (v === '' || Number(v) < 0 || Number(v) > 1000) { showToast('Số lon phải từ 0 đến 1000.', 'error'); return; }
+  if (!hasServer()) { MAX_QUA_PER_LOAI = Number(v); buildReport(); showToast('(Demo) Đã lưu.', 'success'); return; }
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) { MAX_QUA_PER_LOAI = res.max; buildReport(); showToast('Đã lưu mức tối đa: ' + res.max + ' lon/loại.', 'success'); }
+      else adminFail((res && res.error) || 'Lỗi');
+    })
+    .withFailureHandler(adminFail)
+    .adminSetMaxQuaLon(Number(v), adminToken);
 }
 function adminAddCat(type) {
   var nn = prompt(type === 'store' ? 'Tên cửa hàng mới:' : 'Tên sản phẩm mới:');
