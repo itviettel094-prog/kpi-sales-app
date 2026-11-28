@@ -377,78 +377,95 @@ details.fold[open] > summary { margin-bottom:8px; }
     <h3>⚙️ Quản trị (Admin)</h3>
     <div class="hint">Admin có mọi quyền: Sửa/Xoá mọi dòng trong Lịch sử, nhập Tồn đầu/cuối không bị khoá giờ, luôn xem được dữ liệu của tất cả, và chỉnh các cài đặt bên dưới.</div>
 
-    <div class="grp-sec">👁️ Phân quyền xem dữ liệu</div>
-    <div class="sch-box">
-      <label class="sw"><input type="checkbox" id="a_viewOwn" onchange="adminSaveViewScope()"> <span>Nhân viên chỉ xem dữ liệu do chính mình nhập</span></label>
-      <div class="hint" style="text-align:left;margin:0 0 8px">Bật: ai nhập thì chỉ xem được dòng của người đó. Tắt: nhân viên xem được dữ liệu của nhau.</div>
-      <label class="sw"><input type="checkbox" id="a_supOwn" onchange="adminSaveViewScope()"> <span>Sup chỉ xem điểm bán / PG của Sup đó</span></label>
-      <div class="hint" style="text-align:left;margin:0">Bật: Trần Thị Dung và Nguyễn Ngọc Tài chỉ xem điểm bán thuộc Sup của mình (theo cột "Sup" trong sheet Danh mục). Tắt: các Sup xem được tất cả.</div>
-    </div>
 
-    <div class="grp-sec">📝 Báo cáo Checkin</div>
-    <label class="sw"><input type="checkbox" id="a_showName" onchange="adminToggleNameRow()"> <span>Hiện ô Họ tên &amp; Khu vực</span></label>
 
-    <div class="grp-sec">🎁 Link Báo Quà Tặng</div>
-    <label class="sw"><input type="checkbox" id="a_supLink" onchange="adminSaveSupLink()"> <span>Hiện nút link Báo Quà Tặng cho Sup</span></label>
-    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở link Báo Quà Tặng trong tab Báo cáo. Admin luôn thấy.</div>
 
-    <div class="grp-sec">📦 Nhập Tồn đầu với Sup</div>
-    <label class="sw"><input type="checkbox" id="a_supOpen" onchange="adminSaveSupOpen()"> <span>Cho Sup nhập Tồn đầu</span></label>
-    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: Sup không còn thấy nút Tồn đầu và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
 
-    <div class="grp-sec">📦 Nhập Tồn cuối với Sup</div>
-    <label class="sw"><input type="checkbox" id="a_supClose" onchange="adminSaveSupClose()"> <span>Cho Sup nhập Tồn cuối</span></label>
-    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: Sup không còn thấy nút Tồn cuối và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
+   <details class="fold" style="margin-bottom:8px">
+  <summary class="grp-sec" style="margin:0">👁️ Phân quyền xem dữ liệu</summary>
+  <div class="sch-box">
+    <label class="sw"><input type="checkbox" id="a_viewOwn" onchange="adminSaveViewScope()"> <span>Nhân viên chỉ xem dữ liệu do chính mình nhập</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: ai nhập thì chỉ xem được dòng của người đó. Tắt: nhân viên xem được dữ liệu của nhau.</div>
+    <label class="sw"><input type="checkbox" id="a_supOwn" onchange="adminSaveViewScope()"> <span>Sup chỉ xem điểm bán / PG của Sup đó</span></label>
+    <div class="hint" style="text-align:left;margin:0">Bật: Trần Thị Dung và Nguyễn Ngọc Tài chỉ xem điểm bán thuộc Sup của mình (theo cột "Sup" trong sheet Danh mục). Tắt: các Sup xem được tất cả.</div>
+  </div>
+</details>
 
-    <div class="grp-sec">🖼️ Slide ảnh nghiệm thu</div>
-    <label class="sw"><input type="checkbox" id="a_supSlide" onchange="adminSaveSupSlide()"> <span>Hiện nút Slide ảnh nghiệm thu cho Sup</span></label>
-    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở Slide ảnh nghiệm thu trong tab Báo cáo. Admin luôn thấy.</div>
-    <div style="margin-bottom:8px">
-      <a href="https://itviettel094-prog.github.io/slideanhnghiemthu/" target="_blank" rel="noopener"
-         class="btn-submit"
-         style="display:block;text-align:center;text-decoration:none;background:#6a1b9a;margin-bottom:0">
-        🖼️ Mở Slide ảnh nghiệm thu
-      </a>
-    </div>
-
-    <div class="grp-sec">📋 Báo cáo Tồn cuối</div>
+<details class="fold" style="margin-bottom:8px">
+  <summary class="grp-sec" style="margin:0">📝 Báo cáo &amp; Nhập tồn với Sup</summary>
+  <div class="sch-box">
+    <label class="sw"><input type="checkbox" id="a_showName" onchange="adminToggleNameRow()"> <span>Hiện ô Họ tên &amp; Khu vực (Báo cáo Checkin)</span></label>
     <label class="sw"><input type="checkbox" id="a_showTonDau" onchange="adminSaveShowTonDauInClose()"> <span>Hiện Tồn đầu ca trong báo cáo Tồn cuối</span></label>
     <div class="hint" style="text-align:left;margin:0 0 8px">Bật: mỗi điểm bán trong báo cáo Checkout sẽ có thêm dòng "Báo cáo tồn đầu ca" trước "Báo cáo số bán trong ca".</div>
+    <label class="sw"><input type="checkbox" id="a_supOpen" onchange="adminSaveSupOpen()"> <span>Cho Sup nhập Tồn đầu</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: Sup không còn thấy nút Tồn đầu và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
+    <label class="sw"><input type="checkbox" id="a_supClose" onchange="adminSaveSupClose()"> <span>Cho Sup nhập Tồn cuối</span></label>
+    <div class="hint" style="text-align:left;margin:0">Tắt: Sup không còn thấy nút Tồn cuối và server cũng không cho lưu. Admin và nhân viên không bị ảnh hưởng.</div>
+  </div>
+</details>
 
-    <div class="grp-sec">🛒 Nút "KPI bán hàng"</div>
+<details class="fold" style="margin-bottom:8px">
+  <summary class="grp-sec" style="margin:0">🖼️ Slide nghiệm thu &amp; 🎁 Báo quà tặng</summary>
+  <div class="sch-box">
+    <label class="sw"><input type="checkbox" id="a_supSlide" onchange="adminSaveSupSlide()"> <span>Hiện nút Slide ảnh nghiệm thu cho Sup</span></label>
+    <div class="hint" style="text-align:left;margin:0 0 8px">Bật: Sup thấy nút mở Slide ảnh nghiệm thu trong tab Báo cáo. Admin luôn thấy.</div>
+    <div style="margin-bottom:12px">
+      <a href="https://itviettel094-prog.github.io/slideanhnghiemthu/" target="_blank" rel="noopener" class="btn-submit"
+         style="display:block;text-align:center;text-decoration:none;background:#6a1b9a;margin-bottom:0">🖼️ Mở Slide ảnh nghiệm thu</a>
+    </div>
+    <div style="margin-bottom:12px">
+      <a href="https://itviettel094-prog.github.io/BaoQuaTangBiaHaBeCo/" target="_blank" rel="noopener" class="btn-submit"
+         style="display:block;text-align:center;text-decoration:none;background:#1565c0;margin-bottom:0">🎁 Mở Báo Quà Tặng Bia Hà Nội</a>
+    </div>
+    <label class="sw"><input type="checkbox" id="a_supLink" onchange="adminSaveSupLink()"> <span>Hiện nút link Báo Quà Tặng cho Sup</span></label>
+    <div class="hint" style="text-align:left;margin:0">Bật: Sup thấy nút mở link Báo Quà Tặng trong tab Báo cáo. Admin luôn thấy.</div>
+  </div>
+</details>
+
+<details class="fold" style="margin-bottom:8px">
+  <summary class="grp-sec" style="margin:0">🛒 Nút "KPI bán hàng" &amp; 📊 Nút "Báo cáo"</summary>
+  <div class="sch-box">
     <label class="sw"><input type="checkbox" id="a_salesVisible" onchange="adminSaveSalesVisible()"> <span>Hiện nút KPI bán hàng cho nhân viên</span></label>
-
-    <div class="grp-sec">📊 Nút "Báo cáo"</div>
     <label class="sw"><input type="checkbox" id="a_reportVisible" onchange="adminSaveReportVisible()"> <span>Hiện nút Báo cáo cho nhân viên (PG)</span></label>
-    <div class="hint" style="text-align:left;margin:0 0 8px">Tắt: nút "4️⃣ Báo cáo" sẽ ẩn hẳn với nhân viên (PG). Sup và Admin luôn thấy.</div>
+    <div class="hint" style="text-align:left;margin:0">Tắt nút Báo cáo: nút "4️⃣ Báo cáo" sẽ ẩn hẳn với nhân viên (PG). Sup và Admin luôn thấy.</div>
+  </div>
+</details>
 
-    <div class="grp-sec">⏱️ Thời gian chờ nhập Tồn cuối (phút)</div>
+<div class="grp-sec">⏱️ Thời gian chờ nhập Tồn cuối (phút)</div>
+<div class="row row-ds">
+  <div class="input-group"><input type="number" id="a_delay" min="0" max="1440"></div>
+  <div class="input-group"><button class="btn-secondary" style="padding:9px" onclick="adminSaveDelay()">Lưu</button></div>
+</div>
+
+<details class="fold" style="margin-bottom:8px">
+  <summary class="grp-sec" style="margin:0">⏰ Hẹn giờ mở nhập Tồn đầu / Tồn cuối</summary>
+  <div class="hint" style="margin-bottom:6px">Bật: nhân viên chỉ nhập được trong khung giờ đã đặt. Tắt: không giới hạn giờ. Admin luôn nhập được.</div>
+  <div class="sch-box">
+    <label class="sw"><input type="checkbox" id="a_open_on"> <span>Tồn đầu — bật hẹn giờ</span></label>
     <div class="row row-ds">
-      <div class="input-group"><input type="number" id="a_delay" min="0" max="1440"></div>
-      <div class="input-group"><button class="btn-secondary" style="padding:9px" onclick="adminSaveDelay()">Lưu</button></div>
+      <div class="input-group"><label class="input-label">Mở từ</label><input type="time" id="a_open_from"></div>
+      <div class="input-group"><label class="input-label">Đến</label><input type="time" id="a_open_to"></div>
     </div>
+    <label class="sw"><input type="checkbox" id="a_close_on"> <span>Tồn cuối — bật hẹn giờ</span></label>
+    <div class="row row-ds" style="margin-bottom:0">
+      <div class="input-group"><label class="input-label">Mở từ</label><input type="time" id="a_close_from"></div>
+      <div class="input-group"><label class="input-label">Đến</label><input type="time" id="a_close_to"></div>
+    </div>
+  </div>
+  <button class="btn-secondary btn-add-line" onclick="adminSaveSchedule()">💾 Lưu hẹn giờ</button>
+</details>
 
-    <div class="grp-sec">⏰ Hẹn giờ mở nhập Tồn đầu / Tồn cuối</div>
-    <div class="hint" style="margin-bottom:6px">Bật: nhân viên chỉ nhập được trong khung giờ đã đặt. Tắt: không giới hạn giờ. Admin luôn nhập được.</div>
-    <div class="sch-box">
-      <label class="sw"><input type="checkbox" id="a_open_on"> <span>Tồn đầu — bật hẹn giờ</span></label>
-      <div class="row row-ds" style="margin-bottom:0">
-        <div class="input-group"><label class="input-label">Mở từ</label><input type="time" id="a_open_from"></div>
-        <div class="input-group"><label class="input-label">Đến</label><input type="time" id="a_open_to"></div>
-      </div>
-    </div>
-    <div class="sch-box">
-      <label class="sw"><input type="checkbox" id="a_close_on"> <span>Tồn cuối — bật hẹn giờ</span></label>
-      <div class="row row-ds" style="margin-bottom:0">
-        <div class="input-group"><label class="input-label">Mở từ</label><input type="time" id="a_close_from"></div>
-        <div class="input-group"><label class="input-label">Đến</label><input type="time" id="a_close_to"></div>
-      </div>
-    </div>
-    <button class="btn-secondary btn-add-line" onclick="adminSaveSchedule()">💾 Lưu hẹn giờ</button>
 
-    <div class="grp-sec">👥 Nhân viên online / offline</div>
-    <button class="btn-secondary btn-add-line" onclick="loadPresence()">🔄 Làm mới</button>
-    <div id="a_presence"></div>
+
+
+
+
+
+    <details class="fold" style="margin-bottom:8px">
+      <summary class="grp-sec" style="margin:0">👥 Nhân viên online / offline</summary>
+      <button class="btn-secondary btn-add-line" onclick="loadPresence()">🔄 Làm mới</button>
+      <div id="a_presence"></div>
+    </details>
 <div class="grp-sec">🔗 Kiểm tra đồng bộ "Nhập sản lượng"</div>
     <div class="row row-ds">
       <div class="input-group"><input type="date" id="a_syncDate"></div>
@@ -463,14 +480,6 @@ details.fold[open] > summary { margin-bottom:8px; }
     <div id="a_productList"></div>
     <button class="btn-secondary btn-add-line" onclick="adminAddCat('product')">➕ Thêm sản phẩm</button>
 
-    <div style="margin-bottom:8px">
-      <a href="https://itviettel094-prog.github.io/BaoQuaTangBiaHaBeCo/"
-         target="_blank" rel="noopener"
-         class="btn-submit"
-         style="display:block;text-align:center;text-decoration:none;background:#1565c0;margin-bottom:0">
-        🎁 Mở Báo Quà Tặng Bia Hà Nội
-      </a>
-    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeAdminPanel()">Đóng</button>
       <button class="btn-danger" onclick="doAdminLogout()">Thoát admin</button>
