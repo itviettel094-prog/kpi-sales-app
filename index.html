@@ -212,6 +212,7 @@ details.fold[open] > summary { margin-bottom:8px; }
 
       <div class="hint" id="lockInfo" style="margin-top:-4px;color:#8a6d00;font-weight:700"></div>
       <div class="hint" id="scopeInfo" style="margin-top:-4px;color:#1565c0;font-weight:700"></div>
+      <div class="hint" id="locWarn" style="display:none;margin-top:-4px;color:#dc3545;font-weight:800;background:#fdecee;border:1px dashed #dc3545;border-radius:8px;padding:8px"></div>
 
       <div class="nav">
         <button id="navStock" class="active" onclick="switchView('stock')">1️⃣ Tồn Đầu/Cuối</button>
@@ -2782,7 +2783,9 @@ function renderSos(d) {
   document.getElementById('sosInfo').innerHTML =
     '<b>' + escHtml(d.tag) + '</b> (' + escHtml(d.by) + ') cần hỗ trợ — ' + agoText(d.now - d.at) + ' trước'
     + (d.msg ? '<br>' + escHtml(d.msg) : '')
-    + (d.loc ? '' : '<br><b style="color:#dc3545">Chưa có vị trí của người cầu cứu</b>');
+    + (d.loc ? '' : (d.fallback && d.fallback.addr
+        ? '<br><b style="color:#dc3545">⚠️ Chưa có GPS. Có thể đang ở điểm bán: ' + escHtml(d.fallback.store) + ' — ' + escHtml(d.fallback.addr) + '</b>'
+        : '<br><b style="color:#dc3545">Chưa có vị trí của người cầu cứu</b>'));
   if (!_sosMap) {
     _sosMap = L.map('sosMap');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(_sosMap);
@@ -2873,22 +2876,42 @@ function endSosNow() {
     else showToast((r && r.error) || 'Lỗi', 'error');
   }).withFailureHandler(function(e) { showToast(e.message, 'error'); }).endSos();
 }
-/* ===== WEB GỬI VỊ TRÍ ĐỊNH KỲ (app Android đã có LocationService nên bỏ qua) ===== */
-function sendWebHeartbeat() {
+/* ===== WEB GỬI VỊ TRÍ ĐỊNH KỲ + BẮT ĐỊNH VỊ NGAY KHI MỞ TRANG ===== */
+function setLocWarn(msg) {
+  var el = document.getElementById('locWarn');
+  if (!el) return;
+  if (msg) { el.textContent = msg; el.style.display = ''; }
+  else { el.style.display = 'none'; }
+}
+function _sendLoc(p) {
+  setLocWarn('');
+  if (!hasServer()) return;
+  GAS_RUN.withSuccessHandler(function() {}).withFailureHandler(function() {})
+    .webHeartbeat({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
+}
+// Xin định vị NGAY LẬP TỨC khi mở web: ưu tiên lấy nhanh qua WiFi/trạm BTS (enableHighAccuracy:false),
+// sau đó refine lại bằng GPS chính xác hơn nếu có (enableHighAccuracy:true).
+function requestLocationNow() {
   if (window.AndroidBridge || !hasServer() || document.hidden) return;
   if (typeof _tokenValid === 'function' && !_tokenValid()) return;
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(
-    function(p) {
-      GAS_RUN.withSuccessHandler(function() {}).withFailureHandler(function() {})
-        .webHeartbeat({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
-    },
-    function() {},
-    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  if (!navigator.geolocation) { setLocWarn('⚠️ Trình duyệt này không hỗ trợ định vị. Vui lòng dùng trình duyệt khác (Chrome, Safari).'); return; }
+
+  // Bước 1: lấy nhanh qua WiFi/trạm BTS (không cần GPS, trả lời trong vài giây)
+  navigator.geolocation.getCurrentPosition(_sendLoc, function(err) {
+    if (err.code === err.PERMISSION_DENIED) {
+      setLocWarn('⚠️ Bạn cần BẬT quyền Vị trí cho trang web này để hệ thống xác định đúng điểm bán và hỗ trợ khẩn cấp (SOS). Vào cài đặt trình duyệt > Quyền trang web > Vị trí > Cho phép, rồi tải lại trang.');
+    }
+  }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 });
+
+  // Bước 2: refine bằng GPS chính xác hơn (nếu máy có GPS và bật)
+  navigator.geolocation.getCurrentPosition(_sendLoc, function() {}, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
 }
-setInterval(sendWebHeartbeat, 60000);
-window.addEventListener('load', function() { setTimeout(sendWebHeartbeat, 5000); });
-document.addEventListener('visibilitychange', function() { if (!document.hidden) sendWebHeartbeat(); });
+setInterval(requestLocationNow, 60000);
+window.addEventListener('load', function() { setTimeout(requestLocationNow, 500); });
+document.addEventListener('visibilitychange', function() { if (!document.hidden) requestLocationNow(); });
+// Vừa đăng nhập Google xong (có token) là xin định vị ngay, không chờ đến chu kỳ 60s tiếp theo
+var _origSetToken = _setToken;
+_setToken = function(t) { _origSetToken(t); setTimeout(requestLocationNow, 300); };
 setInterval(checkSos, 10000);
 window.addEventListener('load', function() { setTimeout(checkSos, 3000); });
 document.addEventListener('visibilitychange', function() { if (!document.hidden) checkSos(); });
