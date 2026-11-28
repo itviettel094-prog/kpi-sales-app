@@ -477,6 +477,9 @@ details.fold[open] > summary { margin-bottom:8px; }
       <div class="input-group"><button class="btn-secondary" style="padding:9px" onclick="adminCheckSync()">Kiểm tra</button></div>
     </div>
     <div id="a_syncList"></div>
+    <div class="grp-sec">🚨 Báo động khẩn cấp</div>
+    <input type="text" id="a_sosMsg" placeholder="Nội dung (tuỳ chọn)" style="margin-bottom:6px">
+    <button class="btn-danger" style="width:100%;margin-bottom:10px;padding:11px" onclick="adminSendSOS()">🚨 PHÁT CHUÔNG KHẨN CẤP TỚI TẤT CẢ</button>
     <div class="grp-sec">🏬 Cửa hàng</div>
     <div id="a_storeList"></div>
     <button class="btn-secondary btn-add-line" onclick="adminAddCat('store')">➕ Thêm cửa hàng</button>
@@ -883,6 +886,7 @@ function renderStockSupStores() {
     + '</div>';
 }
 function onStockSupChange() {
+  document.getElementById('k_sup').style.borderColor = '';
   renderStockSupStores();
   lsSet('kSup', document.getElementById('k_sup').value);
   var storeEl = document.getElementById('k_store');
@@ -1676,6 +1680,7 @@ function addStockLine(silent) {
   var store = document.getElementById('k_store').value;
   var product = document.getElementById('k_product').value;
   var qty = document.getElementById('k_qty').value;
+  if (!requireSup(silent === true)) return false;
   if (!date || !store || store === '__add_new__') {
     if (silent !== true) showMsg('k_msg', 'Vui lòng chọn ngày và cửa hàng trước.', 'error');
     return false;
@@ -1710,10 +1715,24 @@ function resetStockForm() {
   refreshStockMode();
 }
 
+function requireSup(silent) {
+  var supEl = document.getElementById('k_sup');
+  var supRow = document.getElementById('k_supRow');
+  if (!supEl || !supRow || supRow.style.display === 'none') return true;
+  if (supEl.value) { supEl.style.borderColor = ''; return true; }
+  if (silent !== true) {
+    showMsg('k_msg', 'Vui lòng chọn "Sup phụ trách" trước.', 'error');
+    showToast('Bắt buộc chọn "Sup phụ trách" trước khi nhập / lưu.', 'error');
+  }
+  supEl.style.borderColor = '#dc3545';
+  supEl.focus();
+  return false;
+}
 function saveStockEntry() {
   var date = document.getElementById('k_date').value;
   var store = document.getElementById('k_store').value;
 
+  if (!requireSup()) return;
   if (!date || !store || store === '__add_new__') { showMsg('k_msg', 'Vui lòng chọn ngày và cửa hàng.', 'error'); return; }
   var _willClose = (stockMode === 'close') || stockCart.some(function(c){ return c.mode === 'close'; });
   if (_willClose) {
@@ -2663,6 +2682,16 @@ function adminSaveSupLink() {
 function adminToggleNameRow() {
   lsSet('showNameRow', document.getElementById('a_showName').checked ? '1' : '0');
   applyNameRow();
+}
+function adminSendSOS() {
+  if (!confirm('Phát chuông KHẨN CẤP tới TẤT CẢ máy đang cài app?')) return;
+  GAS_RUN
+    .withSuccessHandler(function(res) {
+      if (res && res.ok) showToast('Đã gửi tới ' + res.sent + ' máy.', 'success');
+      else showToast((res && res.error) || 'Lỗi', 'error');
+    })
+    .withFailureHandler(adminFail)
+    .adminSendSOS(document.getElementById('a_sosMsg').value, adminToken);
 }
 function closeAdminPanel() { document.getElementById('adminModal').classList.remove('open'); }
 function doAdminLogout() {
