@@ -30,7 +30,8 @@ class MyFirebaseService : FirebaseMessagingService() {
         PushChannels.ensure(this)
         val isClose = type == "close"
         val channel = if (isClose) PushChannels.CLOSE else PushChannels.OPEN
-        val raw = if (type == "anom") R.raw.lio else if (isClose) R.raw.sup_ton_cuoi else R.raw.sup_ton_dau_ca
+        val lioId = resources.getIdentifier("lio", "raw", packageName)
+        val raw = if (type == "anom" && lioId != 0) lioId else if (isClose || type == "anom") R.raw.sup_ton_cuoi else R.raw.sup_ton_dau_ca
 
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
