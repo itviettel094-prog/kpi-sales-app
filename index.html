@@ -2853,6 +2853,9 @@ var _anomPending = false;
 document.addEventListener('touchstart', function() { if (_anomPending) { _anomPending = false; playAnom(); } }, { passive: true });
 document.addEventListener('click', function() { if (_anomPending) { _anomPending = false; playAnom(); } });
 function playAnom() {
+  if (window.AndroidBridge && typeof AndroidBridge.playNativeSound === 'function') {
+    try { AndroidBridge.playNativeSound('anom'); return; } catch (e) {}
+  }
   var a = _snd.anom; if (!a) return;
   try {
     a._real = true; a.currentTime = 0; a.muted = false;
