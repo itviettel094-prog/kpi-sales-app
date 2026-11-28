@@ -1783,7 +1783,7 @@ function applyAnomalyWarning(list) {
   if (list.length > 0 && (!_anomFirstScanDone || newOnes.length)) {
     var stores = [];
     list.forEach(function(a){ if (stores.indexOf(a.store) === -1) stores.push(a.store); });
-    showToast('⚠️ Vui lòng kiểm tra Số liệu bất thường của cửa hàng: ' + stores.join(', '), 'error', 8000, 'center'); playSound('anom');
+    showToast('⚠️ Vui lòng kiểm tra Số liệu bất thường của cửa hàng: ' + stores.join(', '), 'error', 8000, 'center'); playSound('anom'); list.forEach(function(a){ openGroups[a.date + '||' + a.store] = true; }); setTimeout(function(){ switchView('history'); }, 300);
   }
   _anomKnown = ids;
   _anomFirstScanDone = true;
@@ -1871,7 +1871,7 @@ function renderHistory() {
       salesHtml = '<div class="msg info" style="margin-top:0">Chưa nhập thông tin bán hàng</div>';
     }
 
-    var isOpen = !!openGroups[g.key];
+    var isOpen = (openGroups[g.key] !== undefined) ? openGroups[g.key] : isAnom;
     return '<div class="grp' + (isOpen ? ' open' : '') + (isAnom ? ' grp-anom' : '') + '" id="grp_' + i + '">'
       + '<div class="grp-head" onclick="toggleGroup(' + i + ')">'
       +   '<div class="grp-title">' + escHtml(fmtDMY(g.date)) + ' — ' + escHtml(g.store)
